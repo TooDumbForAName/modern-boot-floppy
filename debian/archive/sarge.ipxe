@@ -1,7 +1,7 @@
 #!ipxe
 
-set releasename:string stable
-set mirror:string http://ftp.debian.org/debian
+set releasename:string sarge
+set mirror:string http://archive.debian.org/debian
 
 #Uncomment the following lines if distributing images with this script embedded! 
 #set ubdl 1
@@ -93,8 +93,8 @@ item --key 7 bios 7.) Resume BIOS boot sequence
 choose --default dhcp fail_option && goto recovery
 
 :find_arch
-echo Finding architecture...
-cpuid --ext 29 && goto is_64bit || goto is_32bit
+echo sarge only (officially) supported 32-bit
+goto is_32bit
 
 :is_64bit
 echo Your computer appears to have a 64-bit processor.
@@ -120,7 +120,7 @@ iseq ${kernelattempts} 6 && goto kernel_failure ||
 echo Downloading kernel...
 sleep 1
 kernel --name linux ${mirror:string}/dists/${releasename:string}/main/installer-${ARCH:string}/current/images/netboot/debian-installer/${ARCH:string}/linux || goto download_kernel 
-imgargs linux root=/dev/initrd
+imgargs linux root=/dev/ramdisk
 goto download_initrd
 
 :download_initrd

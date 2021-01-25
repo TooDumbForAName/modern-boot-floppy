@@ -1,6 +1,6 @@
 #!ipxe
 
-set releasename:string stable
+set releasename:string sid
 set mirror:string http://ftp.debian.org/debian
 
 #Uncomment the following lines if distributing images with this script embedded! 

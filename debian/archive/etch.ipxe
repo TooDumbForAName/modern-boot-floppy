@@ -1,7 +1,7 @@
 #!ipxe
 
-set releasename:string stable
-set mirror:string http://ftp.debian.org/debian
+set releasename:string etch
+set mirror:string http://archive.debian.org/debian
 
 #Uncomment the following lines if distributing images with this script embedded! 
 #set ubdl 1
