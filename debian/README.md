@@ -1,6 +1,6 @@
-#README for Debian scripts
+# README for Debian scripts
 
-## Description
+### Description
 
 * **archive**       -- scripts for older Debian releases that are no longer kept on the main Debian mirrors
 * **stable.ipxe**   -- Downloads whatever the "stable" release of Debian is (currently "buster")
