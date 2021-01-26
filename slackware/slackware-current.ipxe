@@ -2,6 +2,7 @@
 
 set releasename:string -current
 set mirror:string http://ftp.slackware.com/pub/slackware
+set githubhome:string https://github.com/TooDumbForAName/modern-boot-floppy/
 
 #Uncomment the following lines if distributing images with this script embedded! 
 #set ubdl 1
@@ -119,7 +120,7 @@ inc kernelattempts
 iseq ${kernelattempts} 6 && goto kernel_failure ||
 echo Downloading kernel...
 sleep 1
-kernel --name memdisk https://www.zytor.com/netboot/memdisk || goto download_kernel 
+kernel --name memdisk ${githubhome:string}/raw/master/memdisk || goto download_kernel 
 imgargs memdisk harddisk
 goto download_initrd
 
@@ -192,7 +193,7 @@ echo the source code used to create this disk, you may do so at:
 echo  
 echo https://github.com/ipxe/ipxe/ (GitHub repository)
 echo https://github.com/ipxe/ipxe/commit/${gitcommit} (specific version)
-echo https://github.com/TooDumbForAName/modern-boot-floppy (scripts)
+echo ${githubhome:string} (scripts)
 echo 
 prompt Press any key to continue...
 goto detect_interfaces
