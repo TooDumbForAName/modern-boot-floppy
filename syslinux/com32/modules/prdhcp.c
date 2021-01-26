@@ -39,11 +39,11 @@
 #include <unistd.h>
 #include <getkey.h>
 
-#define PRDHCP_DEBUG 0
+#define DEBUG 0
 
 #define dprintf0(f, ...)		((void)0)
 
-#ifdef PRDHCP_DEBUG
+#ifdef DEBUG
 #  define dpressanykey			pressanykey
 #  define dprintf			printf
 #  define dprint_pxe_bootp_t		print_pxe_bootp_t

@@ -29,6 +29,8 @@
 #include <syslinux/config.h>
 #include <syslinux/pxe_api.h>
 #include <stddef.h>
+#include <bios.h>
+#include <com32.h>
 #include <core.h>
 
 void syslinux_final_cleanup(uint16_t flags)

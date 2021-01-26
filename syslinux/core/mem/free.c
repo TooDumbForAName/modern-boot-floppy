@@ -4,7 +4,6 @@
  * Very simple linked-list based malloc()/free().
  */
 
-#include <syslinux/firmware.h>
 #include <stdlib.h>
 #include <dprintf.h>
 #include "malloc.h"
@@ -67,9 +66,14 @@ __free_block(struct free_arena_header *ah)
     return ah;
 }
 
-void bios_free(void *ptr)
+__export void free(void *ptr)
 {
     struct free_arena_header *ah;
+
+    dprintf("free(%p) @ %p\n", ptr, __builtin_return_address(0));
+
+    if ( !ptr )
+        return;
 
     ah = (struct free_arena_header *)
         ((struct arena_header *)ptr - 1);
@@ -82,18 +86,8 @@ void bios_free(void *ptr)
 	dprintf("invalid arena type: %d\n", ARENA_TYPE_GET(ah->a.attrs));
 #endif
 
-    __free_block(ah);
-}
-
-__export void free(void *ptr)
-{
-    dprintf("free(%p) @ %p\n", ptr, __builtin_return_address(0));
-
-    if ( !ptr )
-        return;
-
     sem_down(&__malloc_semaphore, 0);
-    firmware->mem->free(ptr);
+    __free_block(ah);
     sem_up(&__malloc_semaphore);
 
   /* Here we could insert code to return memory to the system. */

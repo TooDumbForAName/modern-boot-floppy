@@ -21,7 +21,6 @@
 #define PXE_H
 
 #include <syslinux/pxe_api.h>
-#include <syslinux/config.h>
 #include <fcntl.h>		/* For OK_FLAGS_MASK */
 #include "fs.h"			/* Mostly for FILENAME_MAX */
 
@@ -107,8 +106,6 @@ struct bootp_t {
 
 struct netconn;
 struct netbuf;
-struct efi_binding;
-
 /*
  * Our inode private information -- this includes the packet buffer!
  */
@@ -127,10 +124,6 @@ union net_private {
 	uint32_t remoteip;  	  /* Remote IP address (0 = disconnected) */
 	uint16_t localport;   	  /* Local port number  (0=not in use) */
     } tftp;
-    struct net_private_efi {
-	struct efi_binding *binding; /* EFI binding for protocol */
-	uint16_t localport;          /* Local port number (0=not in use) */
-    } efi;
 };
 
 struct pxe_pvt_inode {
@@ -151,9 +144,20 @@ struct pxe_pvt_inode {
 #define PVT(i) ((struct pxe_pvt_inode *)((i)->pvt))
 
 /*
+ * Network boot information
+ */
+struct ip_info {
+    uint32_t ipv4;
+    uint32_t myip;
+    uint32_t serverip;
+    uint32_t gateway;
+    uint32_t netmask;
+};
+
+/*
  * Variable externs
  */
-extern struct syslinux_ipinfo IPInfo;
+extern struct ip_info IPInfo;
 
 extern t_PXENV_UNDI_GET_INFORMATION pxe_undi_info;
 extern t_PXENV_UNDI_GET_IFACE_INFO  pxe_undi_iface;
@@ -231,7 +235,6 @@ int undiif_start(uint32_t ip, uint32_t netmask, uint32_t gw);
 void undiif_input(t_PXENV_UNDI_ISR *isr);
 
 /* dhcp_options.c */
-void parse_dhcp_options(const void *, int, uint8_t);
 void parse_dhcp(const void *, size_t);
 
 /* idle.c */
@@ -261,9 +264,8 @@ void ftp_open(struct url_info *url, int flags, struct inode *inode,
 int ftp_readdir(struct inode *inode, struct dirent *dirent);
 
 /* tcp.c */
+void tcp_close_file(struct inode *inode);
+void tcp_fill_buffer(struct inode *inode);
 const struct pxe_conn_ops tcp_conn_ops;
-
-extern void gpxe_init(void);
-extern int pxe_init(bool quiet);
 
 #endif /* pxe.h */

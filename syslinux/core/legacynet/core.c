@@ -20,12 +20,18 @@ const struct url_scheme url_schemes[] = {
  * Open a socket
  *
  * @param:socket, the socket to open
+ * @param:proto, the protocol of the new connection
  *
  * @out: error code, 0 on success, -1 on failure
  */
-int core_udp_open(struct pxe_pvt_inode *socket __unused)
+int net_core_open(struct pxe_pvt_inode *socket __unused,
+		  enum net_core_proto proto)
 {
     struct net_private_tftp *priv = &socket->net.tftp;
+
+    /* The legacy stack only supports UDP */
+    if (proto != NET_CORE_UDP)
+	return -1;
 
     /* Allocate local UDP port number */
     priv->localport = get_port();
@@ -38,7 +44,7 @@ int core_udp_open(struct pxe_pvt_inode *socket __unused)
  *
  * @param:socket, the socket to open
  */
-void core_udp_close(struct pxe_pvt_inode *socket)
+void net_core_close(struct pxe_pvt_inode *socket)
 {
     struct net_private_tftp *priv = &socket->net.tftp;
 
@@ -53,7 +59,7 @@ void core_udp_close(struct pxe_pvt_inode *socket)
  * @param:ip, the ip address
  * @param:port, the port number, host-byte order
  */
-void core_udp_connect(struct pxe_pvt_inode *socket, uint32_t ip,
+void net_core_connect(struct pxe_pvt_inode *socket, uint32_t ip,
 		      uint16_t port)
 {
     struct net_private_tftp *priv = &socket->net.tftp;
@@ -68,7 +74,7 @@ void core_udp_connect(struct pxe_pvt_inode *socket, uint32_t ip,
  *
  * @param:socket, the open socket
  */
-void core_udp_disconnect(struct pxe_pvt_inode *socket __unused)
+void net_core_disconnect(struct pxe_pvt_inode *socket __unused)
 {
 }
 
@@ -82,7 +88,7 @@ void core_udp_disconnect(struct pxe_pvt_inode *socket __unused)
  * @out: src_ip, ip address of the data source
  * @out: src_port, port number of the data source, host-byte order
  */
-int core_udp_recv(struct pxe_pvt_inode *socket, void *buf, uint16_t *buf_len,
+int net_core_recv(struct pxe_pvt_inode *socket, void *buf, uint16_t *buf_len,
 		  uint32_t *src_ip, uint16_t *src_port)
 {
     static __lowmem struct s_PXENV_UDP_READ  udp_read;
@@ -120,7 +126,7 @@ int core_udp_recv(struct pxe_pvt_inode *socket, void *buf, uint16_t *buf_len,
  * @param:data, data buffer to send
  * @param:len, size of data bufer
  */
-void core_udp_send(struct pxe_pvt_inode *socket, const void *data, size_t len)
+void net_core_send(struct pxe_pvt_inode *socket, const void *data, size_t len)
 {
     static __lowmem struct s_PXENV_UDP_WRITE udp_write;
     struct net_private_tftp *priv = &socket->net.tftp;
@@ -145,43 +151,6 @@ void core_udp_send(struct pxe_pvt_inode *socket, const void *data, size_t len)
 
     lfree(lbuf);
 }
-
-/**
- * Send a UDP packet to a destination
- *
- * @param:socket, the open socket
- * @param:data, data buffer to send
- * @param:len, size of data bufer
- * @param:ip, the ip address
- * @param:port, the port number, host-byte order
- */
-void core_udp_sendto(struct pxe_pvt_inode *socket, const void *data, size_t len,
-		     uint32_t ip, uint16_t port)
-{
-    static __lowmem struct s_PXENV_UDP_WRITE udp_write;
-    struct net_private_tftp *priv = &socket->net.tftp;
-    void *lbuf;
-    uint16_t tid;
-
-    lbuf = lmalloc(len);
-    if (!lbuf)
-	return;
-
-    memcpy(lbuf, data, len);
-
-    tid = priv->localport;   /* TID(local port No) */
-    udp_write.buffer    = FAR_PTR(lbuf);
-    udp_write.ip        = ip;
-    udp_write.gw        = gateway(udp_write.ip);
-    udp_write.src_port  = tid;
-    udp_write.dst_port  = htons(port);
-    udp_write.buffer_size = len;
-
-    pxe_call(PXENV_UDP_WRITE, &udp_write);
-
-    lfree(lbuf);
-}
-
 
 /**
  * Network stack-specific initialization

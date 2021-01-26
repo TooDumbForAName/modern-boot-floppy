@@ -32,11 +32,24 @@
  */
 
 #include <syslinux/adv.h>
-#include <syslinux/firmware.h>
 #include <klibc/compiler.h>
-#include <syslinux/adv.h>
+#include <inttypes.h>
+#include <com32.h>
 
+__export void *__syslinux_adv_ptr;
+__export size_t __syslinux_adv_size;
+
+extern void adv_init(void);
 void __constructor __syslinux_init(void)
 {
-	firmware->adv_ops->init();
+    static com32sys_t reg;
+
+    /* Initialize the ADV structure */
+    reg.eax.w[0] = 0x0025;
+    __intcall(0x22, &reg, NULL);
+
+    reg.eax.w[0] = 0x001c;
+    __intcall(0x22, &reg, &reg);
+    __syslinux_adv_ptr = MK_PTR(reg.es, reg.ebx.w[0]);
+    __syslinux_adv_size = reg.ecx.w[0];
 }

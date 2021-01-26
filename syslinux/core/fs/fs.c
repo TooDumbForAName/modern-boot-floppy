@@ -5,11 +5,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dprintf.h>
-#include <syslinux/sysappend.h>
 #include "core.h"
 #include "dev.h"
 #include "fs.h"
 #include "cache.h"
+
+__export char *PATH;
 
 /* The currently mounted filesystem */
 __export struct fs_info *this_fs = NULL;		/* Root filesystem */
@@ -331,7 +332,6 @@ err_path:
     return file_to_handle(file);
 
 err:
-    dprintf("serachdir: error seraching file %s\n", name);
     _close_file(file);
 err_no_close:
     return -1;
@@ -375,13 +375,6 @@ __export void close_file(uint16_t handle)
     }
 }
 
-__export char *fs_uuid(void)
-{
-    if (!this_fs || !this_fs->fs_ops || !this_fs->fs_ops->fs_uuid)
-	return NULL;
-    return this_fs->fs_ops->fs_uuid(this_fs);
-}
-
 /*
  * it will do:
  *    initialize the memory management function;
@@ -390,16 +383,22 @@ __export char *fs_uuid(void)
  *    invoke the fs-specific init function;
  *    initialize the cache if we need one;
  *    finally, get the current inode for relative path looking.
- *
- * ops is a ptr list for several fs_ops
  */
 __bss16 uint16_t SectorSize, SectorShift;
 
-void fs_init(const struct fs_ops **ops, void *priv)
+void fs_init(com32sys_t *regs)
 {
     static struct fs_info fs;	/* The actual filesystem buffer */
+    uint8_t disk_devno = regs->edx.b[0];
+    uint8_t disk_cdrom = regs->edx.b[1];
+    sector_t disk_offset = regs->ecx.l | ((sector_t)regs->ebx.l << 32);
+    uint16_t disk_heads = regs->esi.w[0];
+    uint16_t disk_sectors = regs->edi.w[0];
+    uint32_t maxtransfer = regs->ebp.l;
     int blk_shift = -1;
     struct device *dev = NULL;
+    /* ops is a ptr list for several fs_ops */
+    const struct fs_ops **ops = (const struct fs_ops **)regs->eax.l;
 
     /* Default name for the root directory */
     fs.cwd_name[0] = '/';
@@ -416,7 +415,8 @@ void fs_init(const struct fs_ops **ops, void *priv)
 	    fs.fs_dev = NULL;
 	} else {
 	    if (!dev)
-		dev = device_init(priv);
+		dev = device_init(disk_devno, disk_cdrom, disk_offset,
+				  disk_heads, disk_sectors, maxtransfer);
 	    fs.fs_dev = dev;
 	}
 	/* invoke the fs-specific init code */
@@ -430,9 +430,8 @@ void fs_init(const struct fs_ops **ops, void *priv)
     }
     this_fs = &fs;
 
-    /* initialize the cache only if it wasn't already initialized
-     * by the fs driver */
-    if (fs.fs_dev && fs.fs_dev->cache_data && !fs.fs_dev->cache_init)
+    /* initialize the cache */
+    if (fs.fs_dev && fs.fs_dev->cache_data)
         cache_init(fs.fs_dev, blk_shift);
 
     /* start out in the root directory */
@@ -449,8 +448,4 @@ void fs_init(const struct fs_ops **ops, void *priv)
 
     SectorShift = fs.sector_shift;
     SectorSize  = fs.sector_size;
-
-    /* Add FSUUID=... string to cmdline */
-    sysappend_set_fs_uuid();
-
 }

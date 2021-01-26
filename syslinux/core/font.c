@@ -19,8 +19,6 @@
  *
  */
 
-#include <syslinux/firmware.h>
-#include <syslinux/video.h>
 #include <sys/io.h>
 #include <stdio.h>
 #include <fs.h>
@@ -86,7 +84,7 @@ fail:
 /*
  * use_font:
  *	This routine activates whatever font happens to be in the
- *	vgafontbuf, and updates the bios_adjust_screen data.
+ *	vgafontbuf, and updates the adjust_screen data.
  *      Must be called with CS = DS
  */
 void use_font(void)
@@ -123,7 +121,7 @@ void use_font(void)
 			/* 8 pixels/character */
 			VidCols = ((GXPixCols >> 3) - 1);
 
-			/* No need to call bios_adjust_screen */
+			/* No need to call adjust_screen */
 			return;
 		} else {
 			ireg.eax.w[0] = 0x1110;	/* Load into VGA RAM */
@@ -134,28 +132,24 @@ void use_font(void)
 
 			__intcall(0x10, &ireg, &oreg);
 
-                        memset(&ireg, 0, sizeof(ireg));
 			ireg.ebx.b[0] = 0;
 			ireg.eax.w[0] = 0x1103; /* Select page 0 */
 			__intcall(0x10, &ireg, NULL);
 		}
-
 	}
 
-	bios_adjust_screen();
+	adjust_screen();
 }
 
 /*
- * bios_adjust_screen: Set the internal variables associated with the screen size.
+ * adjust_screen: Set the internal variables associated with the screen size.
  *		This is a subroutine in case we're loading a custom font.
  */
-void bios_adjust_screen(void)
+void adjust_screen(void)
 {
 	com32sys_t ireg, oreg;
 	volatile uint8_t *vidrows = (volatile uint8_t *)BIOS_vidrows;
 	uint8_t rows, cols;
-
-	memset(&ireg, 0, sizeof(ireg));
 
 	rows = *vidrows;
 	if (!rows) {
@@ -173,12 +167,6 @@ void bios_adjust_screen(void)
 	cols = oreg.eax.b[1];
 
 	VidCols = --cols;	/* Store count-1 (same as rows) */
-}
-
-void adjust_screen(void)
-{
-	if (firmware->adjust_screen)
-		firmware->adjust_screen();
 }
 
 void pm_adjust_screen(com32sys_t *regs __unused)

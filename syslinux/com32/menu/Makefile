@@ -14,16 +14,17 @@
 ## Simple menu system
 ##
 
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/elf.mk
 
-LNXLIBS	   = $(objdir)/com32/libutil/libutil_lnx.a
+LNXLIBS	   = ../libutil/libutil_lnx.a
 
 MODULES	  = menu.c32 vesamenu.c32
 TESTFILES =
 
-COMMONOBJS = menumain.o readconfig.o passwd.o drain.o \
-		printmsg.o colors.o background.o refstr.o
+COMMONOBJS = menumain.o readconfig.o passwd.o drain.o printmsg.o colors.o \
+	background.o refstr.o
 
 all: $(MODULES) $(TESTFILES)
 

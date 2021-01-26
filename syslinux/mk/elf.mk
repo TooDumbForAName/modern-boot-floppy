@@ -16,66 +16,48 @@
 
 include $(MAKEDIR)/syslinux.mk
 
-# Support IA32 and x86_64 platforms with one build
-# Set up architecture specifics; for cross compilation, set ARCH as apt
 GCCOPT := $(call gcc_ok,-std=gnu99,)
-ifeq ($(ARCH),i386)
-	GCCOPT += $(call gcc_ok,-m32,)
-	GCCOPT += $(call gcc_ok,-march=i386)
-	GCCOPT += $(call gcc_ok,-mpreferred-stack-boundary=2,)
-endif
-ifeq ($(ARCH),x86_64)
-	GCCOPT += $(call gcc_ok,-m64,)
-	GCCOPT += $(call gcc_ok,-march=x86-64)
-	#let preferred-stack-boundary be default (=4)
-endif
-GCCOPT += -Os -fomit-frame-pointer
+GCCOPT += $(call gcc_ok,-m32,)
 GCCOPT += $(call gcc_ok,-fno-stack-protector,)
 GCCOPT += $(call gcc_ok,-fwrapv,)
 GCCOPT += $(call gcc_ok,-freg-struct-return,)
+GCCOPT += -march=i386 -Os -fomit-frame-pointer -mregparm=3 -DREGPARM=3
 GCCOPT += $(call gcc_ok,-fno-exceptions,)
 GCCOPT += $(call gcc_ok,-fno-asynchronous-unwind-tables,)
-# Note -fPIE does not work with ld on x86_64, try -fPIC instead
-# Does BIOS build depend on -fPIE?
-GCCOPT += $(call gcc_ok,-fPIC)
+GCCOPT += $(call gcc_ok,-fPIE,-fPIC)
 GCCOPT += $(call gcc_ok,-falign-functions=0,-malign-functions=0)
 GCCOPT += $(call gcc_ok,-falign-jumps=0,-malign-jumps=0)
 GCCOPT += $(call gcc_ok,-falign-labels=0,-malign-labels=0)
 GCCOPT += $(call gcc_ok,-falign-loops=0,-malign-loops=0)
+GCCOPT += $(call gcc_ok,-mpreferred-stack-boundary=2,)
 
 com32 = $(topdir)/com32
 core = $(topdir)/core
 
 ifneq ($(NOGPL),1)
-GPLLIB     = $(objdir)/com32/gpllib/libgpl.c32
+GPLLIB     = $(com32)/gpllib/libgpl.c32
 GPLINCLUDE = -I$(com32)/gplinclude
 else
 GPLLIB     =
 GPLINCLUDE =
 endif
 
-CFLAGS     = $(GCCOPT) $(GCCWARN) -W -Wall \
-	     -fomit-frame-pointer -D__COM32__ -D__FIRMWARE_$(FIRMWARE)__ -DDYNAMIC_MODULE \
+CFLAGS     = $(GCCOPT) -W -Wall -march=i386 \
+	     -fomit-frame-pointer -D__COM32__ -DDYNAMIC_MODULE \
 	     -nostdinc -iwithprefix include \
-	     -I$(com32)/libutil/include -I$(com32)/include \
-		-I$(com32)/include/sys $(GPLINCLUDE) -I$(core)/include \
-		-I$(objdir) -DLDLINUX=\"$(LDLINUX)\"
-ifndef EFI_BUILD
-CFLAGS	  += -mregparm=3 -DREGPARM=3
-endif
-
-SFLAGS     = $(GCCOPT) -D__COM32__ -D__FIRMWARE_$(FIRMWARE)__ 
-LDFLAGS    = -m elf_$(ARCH) -shared --hash-style=gnu -T $(com32)/lib/$(ARCH)/elf.ld --as-needed
-LIBGCC    := $(shell $(CC) $(GCCOPT) --print-libgcc)
+	     -I$(com32)/libutil/include -I$(com32)/include $(GPLINCLUDE) \
+	     -I$(core)/include
+SFLAGS     = $(GCCOPT) -D__COM32__ -march=i386
+LDFLAGS    = -m elf_i386 -shared --hash-style=gnu -T $(com32)/lib/elf32.ld --as-needed
 
 LNXCFLAGS  = -I$(com32)/libutil/include -W -Wall -O -g -D_GNU_SOURCE
 LNXSFLAGS  = -g
 LNXLDFLAGS = -g
 
-C_LIBS	   += $(objdir)/com32/libutil/libutil.c32 $(GPLLIB) \
-	     $(objdir)/com32/lib/libcom32.c32
-C_LNXLIBS  = $(objdir)/com32/libutil/libutil_lnx.a \
-	     $(objdir)/com32/elflink/ldlinux/ldlinux_lnx.a
+C_LIBS	   = $(com32)/libutil/libutil.c32 $(GPLLIB) \
+	     $(com32)/lib/libcom32.c32
+C_LNXLIBS  = $(com32)/libutil/libutil_lnx.a \
+	     $(com32)/elflink/ldlinux/ldlinux_lnx.a
 
 .SUFFIXES: .lss .c .o
 

@@ -143,31 +143,32 @@ static void free_movelist(struct syslinux_movelist **parentptr)
 }
 
 /*
- * Scan the freelist looking for a particular chunk of memory.  Returns
- * the memmap chunk containing to the first byte of the region.
+ * Scan the freelist looking for a particular chunk of memory
  */
 static const struct syslinux_memmap *is_free_zone(const struct syslinux_memmap
 						  *list, addr_t start,
 						  addr_t len)
 {
-    addr_t last, llast;
-
     dprintf("f: 0x%08x bytes at 0x%08x\n", len, start);
+
+    addr_t last, llast;
 
     last = start + len - 1;
 
     while (list->type != SMT_END) {
+	llast = list->next->start - 1;
 	if (list->start <= start) {
-	    const struct syslinux_memmap *ilist = list;
-	    while (valid_terminal_type(list->type)) {
-		llast = list->next->start - 1;
-		if (llast >= last)
-		    return ilist;
-		list = list->next;
+	    if (llast >= last) {
+		/* Chunk has a single, well-defined type */
+		if (list->type == SMT_FREE) {
+		    dprintf("F: 0x%08x bytes at 0x%08x\n",
+			    list->next->start, list->start);
+		    return list;	/* It's free */
+		}
+		return NULL;	/* Not free */
+	    } else if (llast >= start) {
+		return NULL;	/* Crosses region boundary */
 	    }
-
-	    if (list->start > start)
-		return NULL;	/* Invalid type in region */
 	}
 	list = list->next;
     }
@@ -681,7 +682,7 @@ int main(int argc, char *argv[])
 	return 1;
     } else {
 	dprintf("Final move list:\n");
-	syslinux_dump_movelist(moves);
+	syslinux_dump_movelist(stdout, moves);
 	return 0;
     }
 }

@@ -62,8 +62,10 @@ InitStack	resd 1
 PXEStack	resd 1			; Saved stack during PXE call
 
 		alignb 4
-                global DHCPMagic, RebootTime, BIOSName
+                global DHCPMagic, RebootTime, APIVer, BIOSName
 RebootTime	resd 1			; Reboot timeout, if set by option
+StrucPtr	resw 2			; Pointer to PXENV+ or !PXE structure
+APIVer		resw 1			; PXE API version found
 LocalBootType	resw 1			; Local boot return code
 DHCPMagic	resb 1			; PXELINUX magic flags
 BIOSName	resw 1			; Dummy variable - always 0
@@ -93,7 +95,6 @@ _start:
 hcdhcp_magic	dd 0x2983c8ac		; Magic number
 hcdhcp_len	dd 7*4			; Size of this structure
 hcdhcp_flags	dd 0			; Reserved for the future
-		global bdhcp_len, adhcp_len
 		; Parameters to be parsed before the ones from PXE
 bdhcp_offset	dd 0			; Offset (entered by patcher)
 bdhcp_len	dd 0			; Length (entered by patcher)
@@ -156,7 +157,7 @@ _start1:
 ;
 	        mov eax,ROOT_FS_OPS
 		xor ebp,ebp
-                pm_call pm_fs_init
+                pm_call fs_init
 
 		section .rodata
 		alignz 4
@@ -170,8 +171,7 @@ ROOT_FS_OPS:
 ;
 ; Initialize the idle mechanism
 ;
-		extern reset_idle
-		pm_call reset_idle
+		call reset_idle
 
 ;
 ; Now we're all set to start with our *real* business.
@@ -273,30 +273,24 @@ KernelName	resb FILENAME_MAX	; Mangled name for kernel
 
 		section .text16
 ;
-; COM32 vestigial data structure
+; COMBOOT-loading code
 ;
+%include "comboot.inc"
 %include "com32.inc"
 
-		section .text16
-		global local_boot16:function hidden
-local_boot16:
-		mov [LocalBootType],ax
-		lss sp,[InitStack]
-		pop gs
-		pop fs
-		pop es
-		pop ds
-		popad
-		mov ax,[cs:LocalBootType]
-		cmp ax,-1			; localboot -1 == INT 18h
-		je .int18
-		popfd
-		retf				; Return to PXE
-.int18:
-		popfd
-		int 18h
-		jmp 0F000h:0FFF0h
-		hlt
+;
+; Boot sector loading code
+;
+
+;
+; Abort loading code
+;
+
+;
+; Hardware cleanup common code
+;
+
+%include "localboot.inc"
 
 ;
 ; kaboom: write a message and bail out.  Wait for quite a while,
@@ -327,7 +321,7 @@ kaboom:
 .wait2:		mov dx,[BIOS_timer]
 .wait3:		call pollchar
 		jnz .keypress
-		pm_call __idle
+		call do_idle
 		cmp dx,[BIOS_timer]
 		je .wait3
 		loop .wait2,ecx
@@ -363,18 +357,16 @@ pxenv:
 		jnz .store_stack
 
 .disable_timer:
-		call bios_timer_cleanup
+		call timer_cleanup
 
 .store_stack:
 		pushf
 		cli
 		inc word [cs:PXEStackLock]
 		jnz .skip1
-		pop bp
 		mov [cs:PXEStack],sp
 		mov [cs:PXEStack+2],ss
 		lss sp,[cs:InitStack]
-		push bp
 .skip1:
 		popf
 
@@ -395,9 +387,7 @@ pxenv:
 		cli
 		dec word [cs:PXEStackLock]
 		jns .skip2
-		pop bp
 		lss sp,[cs:PXEStack]
-		push bp
 .skip2:
 		popf
 
@@ -552,14 +542,13 @@ pxe_file_exit_hook:
 		section .data16
 
 		global copyright_str, syslinux_banner
-copyright_str   db 'Copyright (C) 1994-'
+copyright_str   db ' Copyright (C) 1994-'
 		asciidec YEAR
 		db ' H. Peter Anvin et al', CR, LF, 0
 err_bootfailed	db CR, LF, 'Boot failed: press a key to retry, or wait for reset...', CR, LF, 0
 bailmsg		equ err_bootfailed
 localboot_msg	db 'Booting from local disk...', CR, LF, 0
-syslinux_banner	db CR, LF, MY_NAME, ' ', VERSION_STR, ' ', MY_TYPE, ' '
-		db DATE_STR, ' ', 0
+syslinux_banner	db CR, LF, MY_NAME, ' ', VERSION_STR, ' ', DATE_STR, ' ', 0
 
 ;
 ; Misc initialized (data) variables
@@ -568,6 +557,16 @@ syslinux_banner	db CR, LF, MY_NAME, ' ', VERSION_STR, ' ', MY_TYPE, ' '
                 global KeepPXE
 KeepPXE		db 0			; Should PXE be kept around?
 
+;
+; IP information.  Note that the field are in the same order as the
+; Linux kernel expects in the ip= option.
+;
 		section .bss16
-		global OrigFDCTabPtr
-OrigFDCTabPtr	resd 1			; Keep bios_cleanup_hardware() honest
+		alignb 4
+		global IPInfo
+IPInfo:
+.IPv4		resd 1			; IPv4 information
+.MyIP		resd 1			; My IP address 
+.ServerIP	resd 1
+.GatewayIP	resd 1
+.Netmask	resd 1

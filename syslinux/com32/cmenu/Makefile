@@ -18,35 +18,31 @@
 NOGPL := 1
 
 LIBS  = libmenu/libmenu.c32 \
-        $(objdir)/com32/libutil/libutil.c32 \
-        $(objdir)/com32/lib/libcom32.c32
+        $(com32)/libutil/libutil.c32 \
+        $(com32)/lib/libcom32.c32
 
-C_LIBS	  = libmenu/libmenu.c32
-
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/elf.mk
 
-CFLAGS	  += -I$(SRC)/libmenu
+CFLAGS	  += -I./libmenu
 
 LIBMENU = libmenu/syslnx.o libmenu/com32io.o libmenu/tui.o \
 	libmenu/menu.o libmenu/passwords.o libmenu/des.o libmenu/help.o \
-	$(objdir)/com32/libutil/libutil.c32 $(objdir)/com32/lib/libcom32.c32
+	$(com32)/libutil/libutil.c32 $(com32)/lib/libcom32.c32
 
-CMENUS = $(patsubst %.c,%.c32,$(wildcard $(SRC)/*.c))
-IMENUS = $(patsubst %.menu,%.c32,$(wildcard $(SRC)/*.menu))
+CMENUS = $(patsubst %.c,%.c32,$(wildcard *.c))
+IMENUS = $(patsubst %.menu,%.c32,$(wildcard *.menu))
 
-MENUS = $(LIBS) $(subst $(SRC)/,,$(CMENUS) $(IMENUS))
+MENUS = $(LIBS) $(CMENUS) $(IMENUS)
 
 .SUFFIXES: .S .c .o .elf .c32 .menu
 
 .PRECIOUS: %.c
 %.c: %.menu adv_menu.tpl
-	$(PYTHON) $(SRC)/menugen.py --input=$< --output=$@ --template=$(SRC)/adv_menu.tpl
+	$(PYTHON) menugen.py --input=$< --output=$@ --template=adv_menu.tpl
 
-all:	makeoutputdirs menus
-
-makeoutputdirs:
-	@mkdir -p $(OBJ)/libmenu
+all:	menus
 
 libmenu/libmenu.elf: $(LIBMENU)
 	$(LD) -shared $(LDFLAGS) -soname $(patsubst %.elf,%.c32,$(@F)) \
@@ -58,14 +54,14 @@ tidy dist:
 libclean:
 	rm -f libmenu/*.c32
 
-clean: tidy menuclean
-	rm -f *.lss *.com
+clean: tidy menuclean libclean
+	rm -f *.lss *.c32 *.com
 
 menuclean:
 	rm -f $(patsubst %.menu,%.c,$(wildcard *.menu))
 
 spotless: clean libclean menuclean
-	rm -f *~ \#* *.c32
+	rm -f *~ \#*
 
 menus: $(MENUS)
 

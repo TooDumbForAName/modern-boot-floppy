@@ -2,7 +2,7 @@
  * -----------------------------------------------------------------------
  *
  *   Copyright 1994-2008 H. Peter Anvin - All Rights Reserved
- *   Copyright 2009-2014 Intel Corporation; author: H. Peter Anvin
+ *   Copyright 2009 Intel Corporation; author: H. Peter Anvin
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -27,7 +27,6 @@
 #include <fs.h>
 #include <com32.h>
 #include <sys/cpu.h>
-#include <syslinux/firmware.h>
 
 #include "bios.h"
 #include "graphics.h"
@@ -54,7 +53,7 @@ uint8_t ScrollAttribute = 0x07; /* Grey on white (normal text color) */
  *
  * Returns 0 on success, or -1 on error.
  */
-__export int loadkeys(const char *filename)
+__export int loadkeys(char *filename)
 {
 	FILE *f;
 
@@ -107,12 +106,12 @@ void pm_write_serial(com32sys_t *regs)
 	write_serial(regs->eax.b[0]);
 }
 
-void serialcfg(uint16_t *iobase, uint16_t *divisor, uint16_t *flowctl)
+void pm_serialcfg(com32sys_t *regs)
 {
 	uint8_t al, ah;
 
-	*iobase = SerialPort;
-	*divisor = BaudDivisor;
+	regs->eax.w[0] = SerialPort;
+	regs->ecx.w[0] = BaudDivisor;
 
 	al = FlowOutput;
 	ah = FlowInput;
@@ -124,12 +123,7 @@ void serialcfg(uint16_t *iobase, uint16_t *divisor, uint16_t *flowctl)
 	if (!DisplayCon)
 		ah |= 0x80;
 
-	*flowctl = al | (ah << 8);
-}
-
-void pm_serialcfg(com32sys_t *regs)
-{
-	serialcfg(&regs->eax.w[0], &regs->ecx.w[0], &regs->ebx.w[0]);
+	regs->ebx.w[0] = al | (ah << 8);
 }
 
 /*
@@ -148,7 +142,7 @@ __export void write_serial_str(char *data)
  *
  * Returns 1 if character pending.
  */
-int bios_pollchar(void)
+__export int pollchar(void)
 {
 	com32sys_t ireg, oreg;
 	uint8_t data = 0;
@@ -167,8 +161,8 @@ int bios_pollchar(void)
 		/* Already-queued input? */
 		if (SerialTail == SerialHead) {
 			/* LSR */
-			data = inb(SerialPort + 5) & 1;
-			if (data) {
+			data = !(inb(SerialPort + 5) & 1);
+			if (!data) {
 				/* MSR */
 				data = inb(SerialPort + 6);
 
@@ -179,18 +173,14 @@ int bios_pollchar(void)
 					data = 1;
 				else
 					data = 0;
-			}
+			} else
+				data = 1;
 		} else
 			data = 1;
 		sti();
 	}
 
 	return data;
-}
-
-__export int pollchar(void)
-{
-	return firmware->i_ops->pollchar();
 }
 
 void pm_pollchar(com32sys_t *regs)
@@ -201,7 +191,12 @@ void pm_pollchar(com32sys_t *regs)
 		regs->eflags.l |= EFLAGS_ZF;
 }
 
-char bios_getchar(char *hi)
+extern void do_idle(void);
+
+/*
+ * getchar: Read a character from keyboard or serial port
+ */
+__export char getchar(char *hi)
 {
 	com32sys_t ireg, oreg;
 	unsigned char data;
@@ -209,7 +204,7 @@ char bios_getchar(char *hi)
 	memset(&ireg, 0, sizeof(ireg));
 	memset(&oreg, 0, sizeof(oreg));
 	while (1) {
-		__idle();
+		call16(do_idle, &zero_regs, NULL);
 
 		ireg.eax.b[1] = 0x11;	/* Poll keyboard */
 		__intcall(0x16, &ireg, &oreg);
@@ -266,48 +261,6 @@ char bios_getchar(char *hi)
 
 	reset_idle();		/* Character received */
 	return data;
-}
-
-uint8_t bios_shiftflags(void)
-{
-	com32sys_t reg;
-	uint8_t ah, al;
-
-	memset(&reg, 0, sizeof reg);
-	reg.eax.b[1] = 0x12;
-	__intcall(0x16, &reg, &reg);
-	ah = reg.eax.b[1];
-	al = reg.eax.b[0];
-
-	/*
-	 * According to the Interrupt List, "many machines" don't correctly
-	 * fold the Alt state, presumably because it might be AltGr.
-	 * Explicitly fold the Alt and Ctrl states; it fits our needs
-	 * better.
-	 */
-
-	if (ah & 0x0a)
-		al |= 0x08;
-	if (ah & 0x05)
-		al |= 0x04;
-
-	return al;
-}
-
-__export uint8_t kbd_shiftflags(void)
-{
-	if (firmware->i_ops->shiftflags)
-		return firmware->i_ops->shiftflags();
-	else
-		return 0;	/* Unavailable on this firmware */
-}
-
-/*
- * getchar: Read a character from keyboard or serial port
- */
-__export char getchar(char *hi)
-{
-	return firmware->i_ops->getchar(hi);
 }
 
 void pm_getchar(com32sys_t *regs)

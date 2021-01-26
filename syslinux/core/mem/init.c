@@ -4,7 +4,6 @@
 #include "malloc.h"
 #include "core.h"
 #include <syslinux/memscan.h>
-#include <dprintf.h>
 
 struct free_arena_header __core_malloc_head[NHEAP];
 
@@ -13,17 +12,16 @@ extern char __lowmem_heap[];
 extern char free_high_memory[];
 
 #define E820_MEM_MAX 0xfff00000	/* 4 GB - 1 MB */
-int scan_highmem_area(void *data, addr_t start, addr_t len,
-		      enum syslinux_memmap_types type)
+int scan_highmem_area(void *data, addr_t start, addr_t len, bool is_ram)
 {
 	struct free_arena_header *fp;
 
 	(void)data;
 
-	dprintf("start = %x, len = %x, type = %d", start, len, type);
+	dprintf("start = %x, len = %x, is_ram = %d", start, len, is_ram);
 
 	if (start < 0x100000 || start > E820_MEM_MAX
-			     || type != SMT_FREE)
+			     || !is_ram)
 		return 0;
 
 	if (start < __com32.cs_memsize) {
@@ -69,11 +67,11 @@ static void mpool_dump(enum heap heap)
 }
 #endif
 
-uint16_t *bios_free_mem;
 void mem_init(void)
 {
 	struct free_arena_header *fp;
 	int i;
+	uint16_t *bios_free_mem = (uint16_t *)0x413;
 
 	//dprintf("enter");
 

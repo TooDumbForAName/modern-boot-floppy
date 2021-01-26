@@ -56,6 +56,12 @@ static inline void io_delay(void)
 	outb(0x0, IO_DELAY_PORT);
 }
 
+/* conio.c */
+extern unsigned short SerialPort;
+extern unsigned char FlowIgnore;
+extern uint8_t ScrollAttribute;
+extern uint16_t DisplayCon;
+
 /*
  * Sometimes we need to access screen coordinates as separate 8-bit
  * entities and sometimes we need to use them as 16-bit entities. Using
@@ -88,6 +94,7 @@ extern char *SerialHead;
 extern char *SerialTail;
 
 extern void bios_init(void);
+extern void bios_cleanup_hardware(void);
 
 static inline uint16_t get_serial_port(uint16_t port)
 {

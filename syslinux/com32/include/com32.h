@@ -135,7 +135,7 @@ char *lstrdup(const char *);
  * specific segment.  OFFS_VALID() will return whether or not the
  * pointer is actually reachable from the target segment.
  */
-#if defined(CORE_DEBUG) && (defined(__COM32__) || defined(__SYSLINUX_CORE__))
+#if defined(DEBUG) && (defined(__COM32__) || defined(__SYSLINUX_CORE__))
 __noreturn __bad_SEG(const volatile void *);
 
 static inline uint16_t SEG(const volatile void *__p)
@@ -176,7 +176,7 @@ static inline bool _OFFS_VALID(const volatile void *__p, size_t __s,
 
 static inline void *MK_PTR(uint16_t __seg, uint16_t __offs)
 {
-    return (void *)(unsigned long)((__seg << 4) + __offs);
+    return (void *)((__seg << 4) + __offs);
 }
 
 /* Some tools to handle 16:16 far pointers in memory */

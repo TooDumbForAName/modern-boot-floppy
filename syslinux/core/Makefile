@@ -1,7 +1,7 @@
 ## -----------------------------------------------------------------------
 ##
 ##   Copyright 1998-2009 H. Peter Anvin - All Rights Reserved
-##   Copyright 2009-2014 Intel Corporation; author: H. Peter Anvin
+##   Copyright 2009-2010 Intel Corporation; author: H. Peter Anvin
 ##
 ##   This program is free software; you can redistribute it and/or modify
 ##   it under the terms of the GNU General Public License as published by
@@ -15,18 +15,18 @@
 # Makefile for the SYSLINUX core
 #
 
-VPATH = $(SRC)
-
 # No builtin rules
 MAKEFLAGS += -r
 MAKE      += -r
 
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/embedded.mk
--include $(objdir)/version.mk
+-include $(topdir)/version.mk
 
 OPTFLAGS =
-INCLUDES = -I$(SRC)/include -I$(com32)/include -I$(com32)/include/sys -I$(com32)/lib \
-	-I$(SRC)/lwip/src/include -I$(SRC)/lwip/src/include/ipv4 -I$(SRC)/fs/pxe
+INCLUDES = -I./include -I$(com32)/include -I$(com32)/lib \
+	-I./lwip/src/include -I./lwip/src/include/ipv4 -I./fs/pxe
 
 # This is very similar to cp437; technically it's for Norway and Denmark,
 # but it's unlikely the characters that are different will be used in
@@ -39,107 +39,65 @@ BTARGET  = kwdhash.gen \
 	   isolinux.bin isolinux-debug.bin pxelinux.0 lpxelinux.0
 
 # All primary source files for the main syslinux files
-NASMSRC	 := $(wildcard $(SRC)/*.asm)
-NASMHDR  := $(wildcard $(SRC)/*.inc)
-CSRC	 := $(shell find $(SRC) -name '*.c' -print)
-SSRC	 := $(shell find $(SRC) -name '*.S' -print)
-CHDR	 := $(shell find $(SRC) -name '*.h' -print)
+NASMSRC	 := $(wildcard *.asm)
+NASMHDR  := $(wildcard *.inc)
+CSRC	 := $(shell find . -name '*.c' -print)
+SSRC	 := $(shell find . -name '*.S' -print)
+CHDR	 := $(shell find . -name '*.h' -print)
 OTHERSRC := keywords
 ALLSRC    = $(NASMSRC) $(NASMHDR) $(CSRC) $(SSRC) $(CHDR) $(OTHERSRC)
 
-COBJ	 := $(subst $(SRC)/,,$(patsubst %.c,%.o,$(CSRC)))
-SOBJ	 := $(subst $(SRC)/,,$(patsubst %.S,%.o,$(SSRC)))
+COBJ	 := $(patsubst %.c,%.o,$(CSRC))
+SOBJ	 := $(patsubst %.S,%.o,$(SSRC))
 
 # To make this compatible with the following $(filter-out), make sure
-# we prefix everything with $(SRC)
+# we prefix everything with ./
 CORE_PXE_CSRC = \
-	$(addprefix $(SRC)/fs/pxe/, dhcp_option.c pxe.c tftp.c urlparse.c bios.c)
+	$(addprefix ./fs/pxe/, dhcp_option.c pxe.c tftp.c urlparse.c)
 
 LPXELINUX_CSRC = $(CORE_PXE_CSRC) \
-	$(shell find $(SRC)/lwip -name '*.c' -print) \
-	$(addprefix $(SRC)/fs/pxe/, \
+	$(shell find ./lwip -name '*.c' -print) \
+	$(addprefix ./fs/pxe/, \
 		core.c dnsresolv.c ftp.c ftp_readdir.c gpxeurl.c http.c \
 		http_readdir.c idle.c isr.c tcp.c)
 
 PXELINUX_CSRC = $(CORE_PXE_CSRC) \
-	$(shell find $(SRC)/legacynet -name '*.c' -print)
+	$(shell find ./legacynet -name '*.c' -print)
 
-LPXELINUX_OBJS = $(subst $(SRC)/,,$(LPXELINUX_CSRC:%.c=%.o))
-PXELINUX_OBJS  = $(subst $(SRC)/,,$(PXELINUX_CSRC:%.c=%.o))
+LPXELINUX_OBJS = $(LPXELINUX_CSRC:%.c=%.o)
+PXELINUX_OBJS  = $(PXELINUX_CSRC:%.c=%.o)
 
-UNITTEST_CSRC = $(shell find $(SRC) -path '*/tests/*.c' -print)
-UNITTEST_OBJS = $(subst $(SRC)/,,$(UNITTEST_CSRC:%.c=%.o))
-
-# Don't include console and network stack specific objects or unit tests
-FILTER_OBJS = %rawcon.o %plaincon.o %pxelinux-c.o %ldlinux-c.o \
-	%isolinux-c.o %localboot.o %pxeboot.o \
-	$(subst $(OBJ)/,,$(UNITTEST_OBJS)) \
-	$(subst $(OBJ)/,,$(LPXELINUX_OBJS)) \
-	$(subst $(OBJ)/,,$(PXELINUX_OBJS))
-
-ifdef EFI_BUILD
-# EFI is single-threaded, and doesn't use the LZO assembly decoder
-FILTER_OBJS += $(subst $(SRC)/,, \
-	$(patsubst %.S,%.o, $(wildcard $(SRC)/lzo/*.S)) \
-	$(patsubst %.c,%.o, $(wildcard $(SRC)/thread/*.c)) \
-	$(patsubst %.S,%.o, $(wildcard $(SRC)/thread/*.S)))
-endif
-
+# Don't include console and network stack specific objects
+FILTER_OBJS = ./rawcon.o ./plaincon.o $(LPXELINUX_OBJS) $(PXELINUX_OBJS)
 COBJS	 = $(filter-out $(FILTER_OBJS),$(COBJ))
 SOBJS	 = $(filter-out $(FILTER_OBJS),$(SOBJ))
 
-ifdef EFI_BUILD
-COBJS += $(subst $(SRC)/,,$(CORE_PXE_CSRC:%.c=%.o) fs/pxe/ftp.o fs/pxe/ftp_readdir.o \
-	fs/pxe/http.o fs/pxe/http_readdir.o)
-endif
-
 LIB	 = libcom32.a
-LIBS	 = $(LIB) --whole-archive $(objdir)/com32/lib/libcom32core.a
+LIBS	 = $(LIB) --whole-archive $(com32)/lib/libcom32core.a
 LIBDEP   = $(filter-out -% %start%,$(LIBS))
 LIBOBJS	 = $(COBJS) $(SOBJS)
 
 NASMDEBUG = -g -F dwarf
 NASMOPT  += $(NASMDEBUG)
 
-PREPCORE = $(OBJ)/../lzo/prepcore
+PREPCORE = ../lzo/prepcore
 
-CFLAGS += -D__SYSLINUX_CORE__ -D__FIRMWARE_$(FIRMWARE)__ \
-	  -I$(objdir) -DLDLINUX=\"$(LDLINUX)\"
+CFLAGS += -D__SYSLINUX_CORE__
 
 # The DATE is set on the make command line when building binaries for
 # official release.  Otherwise, substitute a hex string that is pretty much
 # guaranteed to be unique to be unique from build to build.
 ifndef HEXDATE
-HEXDATE := $(shell $(PERL) $(SRC)/../now.pl $(SRCS))
+HEXDATE := $(shell $(PERL) ../now.pl $(SRCS))
 endif
 ifndef DATE
-DATE    := $(shell sh $(SRC)/../gen-id.sh $(VERSION) $(HEXDATE))
+DATE    := $(shell sh ../gen-id.sh $(VERSION) $(HEXDATE))
 endif
 
-# Set up the NASM and LD options for the architecture
-NASM_ELF = "unknown"
-LD_PIE = "unknown"
-ifeq ($(ARCH),i386)
-	NASM_ELF = elf
-	LD_PIE = -pie
-endif
-ifeq ($(ARCH),x86_64)
-	NASM_ELF = elf64
-	#LD_PIE = --pic-executable
-	LD_PIE = 
-endif
-
-ifdef EFI_BUILD
-all: makeoutputdirs $(filter-out %bios.o,$(COBJS) $(SOBJS)) codepage.o
-else
-all: makeoutputdirs $(BTARGET)
-endif
-
-makeoutputdirs:
-	@mkdir -p $(sort $(dir $(COBJ) $(SOBJ)))
+all: $(BTARGET)
 
 kwdhash.gen: keywords genhash.pl
-	$(PERL) $(SRC)/genhash.pl < $(SRC)/keywords > $(OBJ)/kwdhash.gen
+	$(PERL) genhash.pl < keywords > kwdhash.gen
 
 .PRECIOUS: %.elf
 
@@ -147,30 +105,27 @@ kwdhash.gen: keywords genhash.pl
 	$(OBJCOPY) -O binary -S $< $(@:.bin=.raw)
 
 # GNU make 3.82 gets confused by the first form
-.PRECIOUS: $(OBJ)/%.raw
+.PRECIOUS: %.raw
 
 %.bin: %.raw $(PREPCORE)
 	$(PREPCORE) $< $@
 
-%.o: %.asm kwdhash.gen $(OBJ)/../version.gen
-	$(NASM) -f $(NASM_ELF) $(NASMOPT) -DDATE_STR="'$(DATE)'" \
+%.o: %.asm kwdhash.gen ../version.gen
+	$(NASM) -f elf $(NASMOPT) -DDATE_STR="'$(DATE)'" \
 		-DHEXDATE="$(HEXDATE)" \
-		-D$(ARCH) \
-		-I$(SRC)/ \
-		-l $(@:.o=.lsr) -o $@ -MP -MD $(dir $@).$(notdir $@).d $<
+		-l $(@:.o=.lsr) -o $@ -MP -MD .$@.d $<
 
 AUXLIBS = libisolinux.a libisolinux-debug.a libldlinux.a \
 	libpxelinux.a liblpxelinux.a
-LDSCRIPT = $(SRC)/$(ARCH)/syslinux.ld
 
-%.elf: %.o $(LIBDEP) $(LDSCRIPT) $(AUXLIBS)
-	$(LD) $(LDFLAGS) -Bsymbolic $(LD_PIE) -E --hash-style=gnu -T $(LDSCRIPT) -M -o $@ $< \
-		--start-group $(LIBS) $(subst $(*F).elf,lib$(*F).a,$@) --end-group \
+%.elf: %.o $(LIBDEP) syslinux.ld $(AUXLIBS)
+	$(LD) $(LDFLAGS) -Bsymbolic -pie -E --hash-style=gnu -T syslinux.ld -M -o $@ $< \
+		--start-group $(LIBS) lib$(patsubst %.elf,%.a,$@) --end-group \
 		> $(@:.elf=.map)
 	$(OBJDUMP) -h $@ > $(@:.elf=.sec)
-	$(PERL) $(SRC)/lstadjust.pl $(@:.elf=.lsr) $(@:.elf=.sec) $(@:.elf=.lst)
+	$(PERL) lstadjust.pl $(@:.elf=.lsr) $(@:.elf=.sec) $(@:.elf=.lst)
 
-libisolinux.a: rawcon.o localboot.o isolinux-c.o
+libisolinux.a: rawcon.o
 	rm -f $@
 	$(AR) cq $@ $^
 	$(RANLIB) $@
@@ -179,18 +134,18 @@ libisolinux-debug.a: libisolinux.a
 	cp $^ $@
 
 # Legacy network stack
-libpxelinux.a: rawcon.o pxeboot.o pxelinux-c.o $(PXELINUX_OBJS)
+libpxelinux.a: rawcon.o $(PXELINUX_OBJS)
 	rm -f $@
 	$(AR) cq $@ $^
 	$(RANLIB) $@
 
 # LwIP network stack
-liblpxelinux.a: rawcon.o pxeboot.o pxelinux-c.o $(LPXELINUX_OBJS)
+liblpxelinux.a: rawcon.o $(LPXELINUX_OBJS)
 	rm -f $@
 	$(AR) cq $@ $^
 	$(RANLIB) $@
 
-libldlinux.a: plaincon.o localboot.o ldlinux-c.o
+libldlinux.a: plaincon.o
 	rm -f $@
 	$(AR) cq $@ $^
 	$(RANLIB) $@
@@ -201,23 +156,19 @@ $(LIB): $(LIBOBJS)
 	$(RANLIB) $@
 
 pxelinux.o: pxelinux.asm kwdhash.gen ../version.gen
-	$(NASM) -f $(NASM_ELF) $(NASMOPT) -DDATE_STR="'$(DATE)'" \
+	$(NASM) -f elf $(NASMOPT) -DDATE_STR="'$(DATE)'" \
 		-DHEXDATE="$(HEXDATE)" \
-		-D$(ARCH) \
-		-I$(SRC)/ \
 		-DIS_LPXELINUX=0 \
-		-l $(@:.o=.lsr) -o $@ -MP -MD $(dir $@).$(notdir $@).d $<
+		-l $(@:.o=.lsr) -o $@ -MP -MD .$@.d $<
 
 pxelinux.0: pxelinux.bin
 	cp -f $< $@
 
 lpxelinux.o: pxelinux.asm kwdhash.gen ../version.gen
-	$(NASM) -f $(NASM_ELF) $(NASMOPT) -DDATE_STR="'$(DATE)'" \
+	$(NASM) -f elf $(NASMOPT) -DDATE_STR="'$(DATE)'" \
 		-DHEXDATE="$(HEXDATE)" \
-		-D$(ARCH) \
-		-I$(SRC)/ \
 		-DIS_LPXELINUX=1 \
-		-l $(@:.o=.lsr) -o $@ -MP -MD $(dir $@).$(notdir $@).d $<
+		-l $(@:.o=.lsr) -o $@ -MP -MD .$@.d $<
 
 lpxelinux.0: lpxelinux.bin
 	cp -f $< $@
@@ -228,7 +179,7 @@ ldlinux.bss: ldlinux.bin
 ldlinux.sys: ldlinux.bin
 	dd if=$< of=$@ bs=512 skip=2
 
-codepage.cp: $(OBJ)/../codepage/$(CODEPAGE).cp
+codepage.cp: ../codepage/$(CODEPAGE).cp
 	cp -f $< $@
 
 codepage.o: codepage.S codepage.cp

@@ -89,14 +89,10 @@ static const char * cmd_reverse_search(int *cursor, clock_t *kbd_to,
 	    break;
 	}
 
-	while (last_found) {
+	while (!list_is_last(&last_found->list, &cli_history_head)) {
 	    p = strstr(last_found->command, buf);
 	    if (p)
 	        break;
-
-	    if (list_is_last(&last_found->list, &cli_history_head))
-		break;
-
 	    last_found = list_entry(last_found->list.next, typeof(*last_found), list);
 	}
 
@@ -172,7 +168,7 @@ const char *edit_cmdline(const char *input, int top /*, int width */ ,
 	    prev_len = max(len, prev_len);
 
 	    /* Redraw the command line */
-	    printf("\033[?25l");
+	    printf("\033[?7l\033[?25l");
 	    printf("\033[1G%s ", input);
 
 	    x = strlen(input);
@@ -395,7 +391,7 @@ const char *edit_cmdline(const char *input, int top /*, int width */ ,
 		    len = strlen(cmdline);
 	        } else {
 	            cmdline[0] = '\0';
-		    cursor = len = 0;
+		    len = 0;
 	        }
 	        redraw = 1;
 	    }
@@ -445,9 +441,6 @@ const char *edit_cmdline(const char *input, int top /*, int width */ ,
 		    }
 		    prev_len++;
 		} else {
-		    if (cursor > len)
-			return NULL;
-
 		    memmove(cmdline + cursor + 1, cmdline + cursor,
 			    len - cursor + 1);
 		    cmdline[cursor++] = key;
@@ -461,14 +454,11 @@ const char *edit_cmdline(const char *input, int top /*, int width */ ,
 
     printf("\033[?7h");
 
-    /* Add the command to the history if its length is larger than 0 */
-    len = strlen(ret);
-    if (len > 0) {
-	comm_counter = malloc(sizeof(struct cli_command));
-	comm_counter->command = malloc(sizeof(char) * (len + 1));
-	strcpy(comm_counter->command, ret);
-	list_add(&(comm_counter->list), &cli_history_head);
-    }
+    /* Add the command to the history */
+    comm_counter = malloc(sizeof(struct cli_command));
+    comm_counter->command = malloc(sizeof(char) * (strlen(ret) + 1));
+    strcpy(comm_counter->command, ret);
+    list_add(&(comm_counter->list), &cli_history_head);
 
     return len ? ret : NULL;
 }

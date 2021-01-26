@@ -24,7 +24,7 @@
 
 #define TICKS_TO_IDLE	4	/* Also in idle.inc */
 
-static jiffies_t _IdleTimer;
+extern jiffies_t _IdleTimer;
 __export uint16_t NoHalt = 0;
 
 int (*idle_hook_func)(void);
@@ -32,7 +32,6 @@ int (*idle_hook_func)(void);
 void reset_idle(void)
 {
     _IdleTimer = jiffies();
-    sti();	/* Guard against BIOS/PXE brokenness... */
 }
 
 __export void __idle(void)
@@ -43,7 +42,6 @@ __export void __idle(void)
     if (idle_hook_func && idle_hook_func())
 	return;			/* Nonzero return = do not idle */
 
-    sti();
     if (NoHalt)
 	cpu_relax();
     else

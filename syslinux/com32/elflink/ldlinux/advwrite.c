@@ -31,11 +31,15 @@
  * Write back the ADV
  */
 
-#include <klibc/compiler.h>
 #include <syslinux/adv.h>
-#include <syslinux/firmware.h>
+#include <klibc/compiler.h>
+#include <com32.h>
 
 __export int syslinux_adv_write(void)
 {
-    return firmware->adv_ops->write();
+    static com32sys_t reg;
+
+    reg.eax.w[0] = 0x001d;
+    __intcall(0x22, &reg, &reg);
+    return (reg.eflags.l & EFLAGS_CF) ? -1 : 0;
 }

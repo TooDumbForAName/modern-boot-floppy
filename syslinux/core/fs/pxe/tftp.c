@@ -8,11 +8,26 @@ const uint8_t TimeoutTable[] = {
     2, 2, 3, 3, 4, 5, 6, 7, 9, 10, 12, 15, 18, 21, 26, 31, 37, 44,
     53, 64, 77, 92, 110, 132, 159, 191, 229, 255, 255, 255, 255, 0
 };
+struct tftp_options {
+    const char *str_ptr;        /* string pointer */
+    size_t      offset;		/* offset into socket structre */
+};
 struct tftp_packet {
     uint16_t opcode;
     uint16_t serial;
     char data[];
 };
+
+#define IFIELD(x)	offsetof(struct inode, x)
+#define PFIELD(x)	(offsetof(struct inode, pvt) + \
+			 offsetof(struct pxe_pvt_inode, x))
+
+static const struct tftp_options tftp_options[] =
+{
+    { "tsize",   IFIELD(size) },
+    { "blksize", PFIELD(tftp_blksize) },
+};
+static const int tftp_nopts = sizeof tftp_options / sizeof tftp_options[0];
 
 static void tftp_error(struct inode *file, uint16_t errnum,
 		       const char *errstr);
@@ -23,7 +38,7 @@ static void tftp_close_file(struct inode *inode)
     if (!socket->tftp_goteof) {
 	tftp_error(inode, 0, "No error, file close");
     }
-    core_udp_close(socket);
+    net_core_close(socket);
 }
 
 /**
@@ -49,7 +64,7 @@ static void tftp_error(struct inode *inode, uint16_t errnum,
     memcpy(err_buf.err_msg, errstr, len);
     err_buf.err_msg[len] = '\0';
 
-    core_udp_send(socket, &err_buf, 4 + len + 1);
+    net_core_send(socket, &err_buf, 4 + len + 1);
 }
 
 /**
@@ -68,7 +83,7 @@ static void ack_packet(struct inode *inode, uint16_t ack_num)
     ack_packet_buf[0]     = TFTP_ACK;
     ack_packet_buf[1]     = htons(ack_num);
 
-    core_udp_send(socket, ack_packet_buf, 4);
+    net_core_send(socket, ack_packet_buf, 4);
 }
 
 /*
@@ -103,7 +118,7 @@ static void tftp_get_packet(struct inode *inode)
 
     while (timeout) {
 	buf_len = socket->tftp_blksize + 4;
-	err = core_udp_recv(socket, socket->tftp_pktbuf, &buf_len,
+	err = net_core_recv(socket, socket->tftp_pktbuf, &buf_len,
 			    &src_ip, &src_port);
 	if (err) {
 	    jiffies_t now = jiffies();
@@ -194,6 +209,8 @@ void tftp_open(struct url_info *url, int flags, struct inode *inode,
     static const char rrq_tail[] = "octet\0""tsize\0""0\0""blksize\0""1408";
     char rrq_packet_buf[2+2*FILENAME_MAX+sizeof rrq_tail];
     char reply_packet_buf[PKTBUF_SIZE];
+    const struct tftp_options *tftp_opt;
+    int i = 0;
     int err;
     int buffersize;
     int rrq_len;
@@ -202,7 +219,7 @@ void tftp_open(struct url_info *url, int flags, struct inode *inode,
     jiffies_t oldtime;
     uint16_t opcode;
     uint16_t blk_num;
-    uint64_t opdata;
+    uint32_t opdata, *opdata_ptr;
     uint16_t src_port;
     uint32_t src_ip;
 
@@ -221,7 +238,7 @@ void tftp_open(struct url_info *url, int flags, struct inode *inode,
 	url->port = TFTP_PORT;
 
     socket->ops = &tftp_conn_ops;
-    if (core_udp_open(socket))
+    if (net_core_open(socket, NET_CORE_UDP))
 	return;
 
     buf = rrq_packet_buf;
@@ -238,40 +255,43 @@ void tftp_open(struct url_info *url, int flags, struct inode *inode,
 
     timeout_ptr = TimeoutTable;   /* Reset timeout */
 sendreq:
+    net_core_disconnect(socket);
     timeout = *timeout_ptr++;
     if (!timeout)
 	return;			/* No file available... */
     oldtime = jiffies();
 
-    core_udp_sendto(socket, rrq_packet_buf, rrq_len, url->ip, url->port);
+    net_core_connect(socket, url->ip, url->port);
+    net_core_send(socket, rrq_packet_buf, rrq_len);
 
     /* If the WRITE call fails, we let the timeout take care of it... */
 wait_pkt:
+    net_core_disconnect(socket);
     for (;;) {
 	buf_len = sizeof(reply_packet_buf);
 
-	err = core_udp_recv(socket, reply_packet_buf, &buf_len,
+	err = net_core_recv(socket, reply_packet_buf, &buf_len,
 			    &src_ip, &src_port);
 	if (err) {
 	    jiffies_t now = jiffies();
 	    if (now - oldtime >= timeout)
 		 goto sendreq;
 	} else {
-	    /* Make sure the packet actually came from the server and
-	       is long enough for a TFTP opcode */
-	    dprintf("tftp_open: got packet buflen=%d\n", buf_len);
-	    if ((src_ip == url->ip) && (buf_len >= 2))
+	    /* Make sure the packet actually came from the server */
+	    if (src_ip == url->ip)
 		break;
 	}
     }
 
-    core_udp_disconnect(socket);
-    core_udp_connect(socket, src_ip, src_port);
+    net_core_disconnect(socket);
+    net_core_connect(socket, src_ip, src_port);
 
     /* filesize <- -1 == unknown */
     inode->size = -1;
     socket->tftp_blksize = TFTP_BLOCKSIZE;
     buffersize = buf_len - 2;	  /* bytes after opcode */
+    if (buffersize < 0)
+        goto wait_pkt;                     /* Garbled reply */
 
     /*
      * Get the opcode type, and parse it
@@ -364,6 +384,22 @@ wait_pkt:
 	    if (!buffersize)
 		break;		/* No option data */
 
+            /*
+             * Parse option pointed to by options; guaranteed to be
+	     * null-terminated
+             */
+            tftp_opt = tftp_options;
+            for (i = 0; i < tftp_nopts; i++) {
+                if (!strcmp(opt, tftp_opt->str_ptr))
+                    break;
+                tftp_opt++;
+            }
+            if (i == tftp_nopts)
+                goto err_reply; /* Non-negotitated option returned,
+				   no idea what it means ...*/
+
+            /* get the address of the filed that we want to write on */
+            opdata_ptr = (uint32_t *)((char *)inode + tftp_opt->offset);
 	    opdata = 0;
 
             /* do convert a number-string to decimal number, just like atoi */
@@ -376,16 +412,7 @@ wait_pkt:
                     goto err_reply;     /* Not a decimal digit */
                 opdata = opdata*10 + d;
             }
-
-	    if (!strcmp(opt, "tsize"))
-		inode->size = opdata;
-	    else if (!strcmp(opt, "blksize"))
-		socket->tftp_blksize = opdata;
-	    else
-		goto err_reply; /* Non-negotitated option returned,
-				   no idea what it means ...*/
-
-
+	    *opdata_ptr = opdata;
 	}
 
 	if (socket->tftp_blksize < 64 || socket->tftp_blksize > PKTBUF_SIZE)
@@ -410,7 +437,7 @@ err_reply:
 
 done:
     if (!inode->size)
-	core_udp_close(socket);
+	net_core_close(socket);
 
     return;
 }

@@ -3,24 +3,23 @@
 
 #include <elf.h>
 #include <stdlib.h>
-#include <sys/module.h>
 
 /**
  * elf_get_header - Returns a pointer to the ELF header structure.
  * @elf_image: pointer to the ELF file image in memory
  */
-static inline Elf_Ehdr *elf_get_header(void *elf_image) {
-	return (Elf_Ehdr*)elf_image;
+static inline Elf32_Ehdr *elf_get_header(void *elf_image) {
+	return (Elf32_Ehdr*)elf_image;
 }
 
 /**
  * elf_get_pht - Returns a pointer to the first entry in the PHT.
  * @elf_image: pointer to the ELF file image in memory
  */
-static inline Elf_Phdr *elf_get_pht(void *elf_image) {
-	Elf_Ehdr *elf_hdr = elf_get_header(elf_image);
+static inline Elf32_Phdr *elf_get_pht(void *elf_image) {
+	Elf32_Ehdr *elf_hdr = elf_get_header(elf_image);
 
-	return (Elf_Phdr*)((Elf_Off)elf_hdr + elf_hdr->e_phoff);
+	return (Elf32_Phdr*)((Elf32_Off)elf_hdr + elf_hdr->e_phoff);
 }
 
 //
@@ -29,11 +28,11 @@ static inline Elf_Phdr *elf_get_pht(void *elf_image) {
  * @elf_image: pointer to the ELF file image in memory
  * @index: the index of the PHT entry to look for
  */
-static inline Elf_Phdr *elf_get_ph(void *elf_image, int index) {
-	Elf_Phdr *elf_pht = elf_get_pht(elf_image);
-	Elf_Ehdr *elf_hdr = elf_get_header(elf_image);
+static inline Elf32_Phdr *elf_get_ph(void *elf_image, int index) {
+	Elf32_Phdr *elf_pht = elf_get_pht(elf_image);
+	Elf32_Ehdr *elf_hdr = elf_get_header(elf_image);
 
-	return (Elf_Phdr*)((Elf_Off)elf_pht + index * elf_hdr->e_phentsize);
+	return (Elf32_Phdr*)((Elf32_Off)elf_pht + index * elf_hdr->e_phentsize);
 }
 
 /**

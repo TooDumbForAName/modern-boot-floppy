@@ -4,7 +4,6 @@
  * Very simple linked-list based malloc()/free().
  */
 
-#include <syslinux/firmware.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -67,11 +66,16 @@ static void *__malloc_from_block(struct free_arena_header *fp,
     return (void *)(&fp->a + 1);
 }
 
-void *bios_malloc(size_t size, enum heap heap, malloc_tag_t tag)
+static void *_malloc(size_t size, enum heap heap, malloc_tag_t tag)
 {
     struct free_arena_header *fp;
     struct free_arena_header *head = &__core_malloc_head[heap];
     void *p = NULL;
+
+    dprintf("_malloc(%zu, %u, %u) @ %p = ",
+	size, heap, tag, __builtin_return_address(0));
+
+    sem_down(&__malloc_semaphore, 0);
 
     if (size) {
 	/* Add the obligatory arena header, and round up */
@@ -86,18 +90,6 @@ void *bios_malloc(size_t size, enum heap heap, malloc_tag_t tag)
         }
     }
 
-    return p;
-}
-
-static void *_malloc(size_t size, enum heap heap, malloc_tag_t tag)
-{
-    void *p;
-
-    dprintf("_malloc(%zu, %u, %u) @ %p = ",
-	size, heap, tag, __builtin_return_address(0));
-
-    sem_down(&__malloc_semaphore, 0);
-    p = firmware->mem->malloc(size, heap, tag);
     sem_up(&__malloc_semaphore);
 
     dprintf("%p\n", p);
@@ -124,11 +116,11 @@ void *pmapi_lmalloc(size_t size)
     return _malloc(size, HEAP_LOWMEM, MALLOC_MODULE);
 }
 
-void *bios_realloc(void *ptr, size_t size)
+__export void *realloc(void *ptr, size_t size)
 {
     struct free_arena_header *ah, *nah;
     struct free_arena_header *head;
-
+	
     void *newptr;
     size_t newsize, oldsize, xsize;
 
@@ -234,11 +226,6 @@ void *bios_realloc(void *ptr, size_t size)
 	    return newptr;
 	}
     }
-}
-
-__export void *realloc(void *ptr, size_t size)
-{
-    return firmware->mem->realloc(ptr, size);
 }
 
 __export void *zalloc(size_t size)

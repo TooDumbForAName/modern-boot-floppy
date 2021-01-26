@@ -62,16 +62,13 @@ ImageSectors	resw 1			; isolinux.bin size, sectors
 GetlinsecPtr	resw 1			; The sector-read pointer
 BIOSName	resw 1			; Display string for BIOS type
 %define HAVE_BIOSNAME 1
-		global BIOSType
 BIOSType	resw 1
 DiskError	resb 1			; Error code for disk I/O
-		global DriveNumber
 DriveNumber	resb 1			; CD-ROM BIOS drive number
 ISOFlags	resb 1			; Flags for ISO directory search
 RetryCount      resb 1			; Used for disk access retries
 
 		alignb 8
-		global Hidden
 Hidden		resq 1			; Used in hybrid mode
 bsSecPerTrack	resw 1			; Used in hybrid mode
 bsHeads		resw 1			; Used in hybrid mode
@@ -83,7 +80,6 @@ bsHeads		resw 1			; Used in hybrid mode
 
 		alignb 8
 _spec_start	equ $
-		global spec_packet
 spec_packet:	resb 1				; Size of packet
 sp_media:	resb 1				; Media type
 sp_drive:	resb 1				; Drive number
@@ -159,7 +155,6 @@ _spec_len	equ _spec_end - _spec_start
 StackBuf	equ STACK_TOP-44	; 44 bytes needed for
 					; the bootsector chainloading
 					; code!
-		global OrigESDI
 OrigESDI	equ StackBuf-4          ; The high dword on the stack
 StackHome	equ OrigESDI
 
@@ -420,7 +415,7 @@ MaxLMA		equ 384*1024		; Reasonable limit (384K)
 		call getlinsec
 		pop eax
 		pop cx
-		movzx edx,cx
+		mov dx,cx
 		pop bp
 		pop bx
 
@@ -1056,8 +1051,8 @@ startup_msg:	db 'Starting up, DL = ', 0
 spec_ok_msg:	db 'Loaded spec packet OK, drive = ', 0
 secsize_msg:	db 'Sector size ', 0
 offset_msg:	db 'Main image LBA = ', 0
-verify_msg:	db 'Image csum verified.', CR, LF, 0
-allread_msg	db 'Image read, jumping to main code...', CR, LF, 0
+verify_msg:	db 'Image checksum verified.', CR, LF, 0
+allread_msg	db 'Main image read, jumping to main code...', CR, LF, 0
 %endif
 noinfotable_msg	db 'No boot info table, assuming single session disk...', CR, LF, 0
 noinfoinspec_msg db 'Spec packet missing LBA information, trying to wing it...', CR, LF, 0
@@ -1084,7 +1079,6 @@ bios_ebios_str	db 'EHDD' ,0
 %endif
 
 		alignz 4
-		global bios_cdrom
 bios_cdrom:	dw getlinsec_cdrom, bios_cdrom_str
 %ifndef DEBUG_MESSAGES
 bios_cbios:	dw getlinsec_cbios, bios_cbios_str
@@ -1160,7 +1154,7 @@ init_fs:
 	        mov ebx,[Hidden+4]
                 mov si,[bsHeads]
 		mov di,[bsSecPerTrack]
-		pm_call pm_fs_init
+		pm_call fs_init
 		pm_call load_env32
 enter_command:
 auto_boot:
@@ -1205,13 +1199,23 @@ KernelName	resb FILENAME_MAX	; Mangled name for kernel
 
 		section .text16
 ;
-; COM32 vestigial data structure
+; COMBOOT-loading code
 ;
+%include "comboot.inc"
 %include "com32.inc"
 
 ;
-; Common local boot code
+; Boot sector loading code
 ;
+
+;
+; Abort loading code
+;
+
+;
+; Hardware cleanup common code
+;
+
 %include "localboot.inc"
 
 ; -----------------------------------------------------------------------------
@@ -1226,7 +1230,3 @@ KernelName	resb FILENAME_MAX	; Mangled name for kernel
 
 		section .data16
 err_disk_image	db 'Cannot load disk image (invalid file)?', CR, LF, 0
-
-		section .bss16
-		global OrigFDCTabPtr
-OrigFDCTabPtr	resd 1			; Keep bios_cleanup_hardware() honest

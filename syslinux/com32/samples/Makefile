@@ -14,16 +14,17 @@
 ## samples for syslinux users
 ##
 
-LIBS = $(objdir)/com32/libutil/libutil.c32
+LIBS = $(com32)/libutil/libutil.c32
 
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/elf.mk
 
 all:	hello.c32 resolv.c32 serialinfo.c32 \
-		localboot.c32 \
-		fancyhello.c32 fancyhello.lnx \
-		keytest.c32 keytest.lnx \
-		advdump.c32 entrydump.c32
+	localboot.c32 \
+	fancyhello.c32 fancyhello.lnx \
+	keytest.c32 keytest.lnx \
+	advdump.c32 entrydump.c32
 
 tidy dist:
 	rm -f *.o *.lo *.a *.lst *.elf .*.d *.tmp

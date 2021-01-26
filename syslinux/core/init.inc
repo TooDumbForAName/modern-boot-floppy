@@ -33,11 +33,15 @@ common_init:
 		cmp eax,__pm_code_len
 		jne kaboom
 
-		extern syslinux_register_bios, init
-
-		pm_call syslinux_register_bios
+		extern init
 		pm_call init
 
+;
+; Set up the COMBOOT APIs
+;
+		call comboot_setup_api
+
+		section .text16
 ;
 ; The code to decompress the PM code and initialize other segments.
 ;

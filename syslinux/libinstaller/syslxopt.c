@@ -23,7 +23,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <sysexits.h>
-#include "version.h"
+#include "../version.h"
 #include "syslxcom.h"
 #include "syslxfs.h"
 #include "syslxopt.h"
@@ -67,7 +67,7 @@ const struct option long_options[] = {
     {"mbr", 0, NULL, 'm'},	/* DOS/Win32 only */
     {"active", 0, NULL, 'a'},	/* DOS/Win32 only */
     {"device", 1, NULL, OPT_DEVICE},
-    {NULL, 0, NULL, 0}
+    {0, 0, 0, 0}
 };
 
 const char short_options[] = "t:fid:UuzsS:H:rvho:OM:ma";

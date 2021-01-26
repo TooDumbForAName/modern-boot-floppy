@@ -12,8 +12,9 @@
  */
 #include <com32.h>
 #include <core.h>
-#include <syslinux/memscan.h>
-#include <syslinux/firmware.h>
+
+extern void timer_cleanup(void);
+extern void comboot_cleanup_api(void);
 
 /*
  * cleanup.c
@@ -26,8 +27,20 @@
  *
  *	Shut down anything transient.
  */
-
 __export void cleanup_hardware(void)
 {
-	firmware->cleanup();
+	/*
+	 * TODO
+	 *
+	 * Linux wants the floppy motor shut off before starting the
+	 * kernel, at least bootsect.S seems to imply so.  If we don't
+	 * load the floppy driver, this is *definitely* so!
+	 */
+	__intcall(0x13, &zero_regs, NULL);
+
+	call16(comboot_cleanup_api, &zero_regs, NULL);
+	call16(timer_cleanup, &zero_regs, NULL);
+
+	/* If we enabled serial port interrupts, clean them up now */
+	sirq_cleanup();
 }

@@ -32,8 +32,8 @@ timer_init:
 		mov dword [BIOS_timer_hook],timer_irq
 		ret
 
-		global bios_timer_cleanup:function hidden
-bios_timer_cleanup:
+		global timer_cleanup:function hidden
+timer_cleanup:
 		; Unhook INT 1Ch
 		mov eax,[BIOS_timer_next]
 		mov [BIOS_timer_hook],eax

@@ -4,7 +4,7 @@
 
 #include "core.h"
 
-#if defined(CORE_DEBUG) || defined(DEBUG_PORT)
+#ifdef DEBUG
 
 #include <dprintf.h>
 

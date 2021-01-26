@@ -29,19 +29,10 @@
 #ifndef _SYSLINUX_MEMSCAN_H
 #define _SYSLINUX_MEMSCAN_H
 
-#include <linux/list.h>
+#include <stdbool.h>
 #include <syslinux/movebits.h>	/* addr_t */
 
-typedef int (*scan_memory_callback_t) (void *, addr_t, addr_t,
-				       enum syslinux_memmap_types type);
-
-struct syslinux_memscan {
-    int (*func)(scan_memory_callback_t callback, void *data);
-    struct list_head next;
-};
-
-void syslinux_memscan_add(struct syslinux_memscan *entry);
-int syslinux_memscan_new(int (*func)(scan_memory_callback_t cb, void *data));
+typedef int (*scan_memory_callback_t) (void *, addr_t, addr_t, bool);
 int syslinux_scan_memory(scan_memory_callback_t callback, void *data);
 
 #endif /* _SYSLINUX_MEMSCAN_H */

@@ -1,7 +1,9 @@
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/syslinux.mk
 
 OPTFLAGS = -g -Os
-INCLUDES = -I$(SRC) -I$(objdir) -I$(SRC)/../libfat -I$(SRC)/../libinstaller
+INCLUDES = -I. -I.. -I../libfat -I../libinstaller
 CFLAGS	 = $(GCCWARN) -D_FILE_OFFSET_BITS=64 $(OPTFLAGS) $(INCLUDES)
 LDFLAGS	 = 
 
@@ -13,12 +15,12 @@ SRCS     = syslinux.c \
 	   ../libinstaller/bootsect_bin.c \
 	   ../libinstaller/ldlinux_bin.c \
 	   ../libinstaller/ldlinuxc32_bin.c \
-	   $(wildcard $(SRC)/../libfat/*.c)
+	   $(wildcard ../libfat/*.c)
 OBJS	 = $(patsubst %.c,%.o,$(notdir $(SRCS)))
 
 .SUFFIXES: .c .o .i .s .S
 
-VPATH = $(SRC):$(SRC)/../libfat:$(SRC)/../libinstaller:$(OBJ)/../libinstaller
+VPATH = .:../libfat:../libinstaller
 
 all: installer
 
@@ -46,4 +48,4 @@ strip:
 %.s: %.c
 	$(CC) $(UMAKEDEPS) $(CFLAGS) -S -o $@ $<
 
--include .*.d
+-include .*.d *.tmp

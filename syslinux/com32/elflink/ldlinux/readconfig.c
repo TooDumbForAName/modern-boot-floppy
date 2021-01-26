@@ -640,7 +640,7 @@ extern const char *append;
 extern uint16_t PXERetry;
 static struct labeldata ld;
 
-static int parse_main_config(const char *filename);
+static int parse_one_config(const char *filename);
 
 static char *is_kernel_type(char *cmdstr, enum kernel_type *type)
 {
@@ -764,114 +764,11 @@ extern void sirq_cleanup_nowipe(void);
 extern void sirq_install(void);
 extern void write_serial_str(char *);
 
-extern void loadfont(const char *);
-extern void loadkeys(const char *);
+extern void loadfont(char *);
+extern void loadkeys(char *);
 
 extern char syslinux_banner[];
 extern char copyright_str[];
-
-/*
- * PATH-based lookup
- *
- * Each entry in the PATH directive is separated by a colon, e.g.
- *
- *     PATH /bar:/bin/foo:/baz/bar/bin
- */
-static int parse_path(char *p)
-{
-    struct path_entry *entry;
-    const char *str;
-
-    while (*p) {
-	char *c = p;
-
-	/* Find the next directory */
-	while (*c && *c != ':')
-	    c++;
-
-	str = refstrndup(p, c - p);
-	if (!str)
-	    goto bail;
-
-	entry = path_add(str);
-	refstr_put(str);
-
-	if (!entry)
-	    goto bail;
-
-	if (!*c++)
-	    break;
-	p = c;
-    }
-
-    return 0;
-
-bail:
-    return -1;
-}
-
-static void parse_config_file(FILE * f);
-
-static void do_include_menu(char *str, struct menu *m)
-{
-    const char *file;
-    char *p;
-    FILE *f;
-    int fd;
-
-    p = skipspace(str);
-    file = refdup_word(&p);
-    p = skipspace(p);
-
-    fd = open(file, O_RDONLY);
-    if (fd < 0)
-	goto put;
-
-    f = fdopen(fd, "r");
-    if (!f)
-	goto bail;
-
-    if (*p) {
-	record(m, &ld, append);
-	m = current_menu = begin_submenu(p);
-    }
-
-    parse_config_file(f);
-
-    if (*p) {
-	record(m, &ld, append);
-	m = current_menu = end_submenu();
-    }
-
-bail:
-    close(fd);
-put:
-    refstr_put(file);
-
-}
-
-static void do_include(char *str)
-{
-    const char *file;
-    char *p;
-    FILE *f;
-    int fd;
-
-    p = skipspace(str);
-    file = refdup_word(&p);
-
-    fd = open(file, O_RDONLY);
-    if (fd < 0)
-	goto put;
-
-    f = fdopen(fd, "r");
-    if (f)
-	parse_config_file(f);
-
-    close(fd);
-put:
-    refstr_put(file);
-}
 
 static void parse_config_file(FILE * f)
 {
@@ -961,7 +858,7 @@ static void parse_config_file(FILE * f)
 		    m->menu_master_passwd = refstrdup(skipspace(p + 6));
 		}
 	    } else if ((ep = looking_at(p, "include"))) {
-		do_include_menu(ep, m);
+		goto do_include;
 	    } else if ((ep = looking_at(p, "background"))) {
 		p = skipspace(ep);
 		refstr_put(m->menu_background);
@@ -1158,7 +1055,23 @@ static void parse_config_file(FILE * f)
 		m->fkeyhelp[fkeyno].background = refdup_word(&p);
 	    }
 	} else if ((ep = looking_at(p, "include"))) {
-	    do_include(ep);
+do_include:
+	    {
+		const char *file;
+		p = skipspace(ep);
+		file = refdup_word(&p);
+		p = skipspace(p);
+		if (*p) {
+		    record(m, &ld, append);
+		    m = current_menu = begin_submenu(p);
+		    parse_one_config(file);
+		    record(m, &ld, append);
+		    m = current_menu = end_submenu();
+		} else {
+		    parse_one_config(file);
+		}
+		refstr_put(file);
+	    }
 	} else if (looking_at(p, "append")) {
 	    const char *a = refstrdup(skipspace(p + 6));
 	    if (ld.label) {
@@ -1211,7 +1124,7 @@ static void parse_config_file(FILE * f)
 	    allowoptions = !!atoi(skipspace(p + 12));
 	} else if ((ep = looking_at(p, "ipappend")) ||
 		   (ep = looking_at(p, "sysappend"))) {
-	    uint32_t s = strtoul(skipspace(ep), NULL, 0);
+	    uint32_t s = strtoul(skipspace(ep), NULL, 16);
 	    if (ld.label)
 		ld.ipappend = s;
 	    else
@@ -1271,9 +1184,16 @@ static void parse_config_file(FILE * f)
 		refstr_put(filename);
 	} else if (looking_at(p, "kbdmap")) {
 		const char *filename;
+		char *dst = KernelName;
+		size_t len = FILENAME_MAX - 1;
 
-		filename = refstrdup(skipspace(p + 6));
-		loadkeys(filename);
+		filename = refstrdup(skipspace(p + 4));
+
+		while (len-- && not_whitespace(*filename))
+			*dst++ = *filename++;
+		*dst = '\0';
+
+		loadkeys(KernelName);
 		refstr_put(filename);
 	}
 	/*
@@ -1358,9 +1278,7 @@ static void parse_config_file(FILE * f)
 		baud = BAUD_DIVISOR / baud;
 		baud &= 0xffff;
 		BaudDivisor = baud;
-
-		port = get_serial_port(port);
-		SerialPort = port;
+		SerialPort = get_serial_port(port);
 
 		/*
 		 * Begin code to actually set up the serial port
@@ -1417,8 +1335,24 @@ static void parse_config_file(FILE * f)
 	} else if (looking_at(p, "say")) {
 		printf("%s\n", p+4);
 	} else if (looking_at(p, "path")) {
-		if (parse_path(skipspace(p + 4)))
-			printf("Failed to parse PATH\n");
+		/* PATH-based lookup */
+		const char *new_path;
+		char *_p;
+		size_t len, new_len;
+
+		new_path = refstrdup(skipspace(p + 4));
+		len = strlen(PATH);
+		new_len = strlen(new_path);
+		_p = malloc(len + new_len + 2);
+		if (_p) {
+			strncpy(_p, PATH, len);
+			_p[len++] = ':';
+			strncpy(_p + len, new_path, new_len);
+			_p[len + new_len] = '\0';
+			free(PATH);
+			PATH = _p;
+		} else
+			printf("Failed to realloc PATH\n");
 	} else if (looking_at(p, "sendcookies")) {
 		const union syslinux_derivative_info *sdi;
 
@@ -1433,7 +1367,7 @@ static void parse_config_file(FILE * f)
     }
 }
 
-static int parse_main_config(const char *filename)
+static int parse_one_config(const char *filename)
 {
 	const char *mode = "r";
 	FILE *f;
@@ -1513,14 +1447,14 @@ void parse_configs(char **argv)
     current_menu = root_menu;
 
     if (!argv || !*argv) {
-	if (parse_main_config(NULL) < 0) {
+	if (parse_one_config(NULL) < 0) {
 	    printf("WARNING: No configuration file found\n");
 	    return;
 	}
     } else {
 	while ((filename = *argv++)) {
 		dprintf("Parsing config: %s", filename);
-	    parse_main_config(filename);
+	    parse_one_config(filename);
 	}
     }
 

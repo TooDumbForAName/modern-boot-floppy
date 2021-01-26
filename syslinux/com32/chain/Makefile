@@ -13,7 +13,9 @@
 ##
 ## -----------------------------------------------------------------------
 
-VPATH = $(SRC)
+
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/elf.mk
 
 OBJS = chain.o partiter.o utility.o options.o mangle.o

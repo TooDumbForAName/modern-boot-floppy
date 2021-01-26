@@ -3,10 +3,8 @@
 
 void sem_init(struct semaphore *sem, int count)
 {
-    if (!!sem) {
-	sem->list.next = sem->list.prev = &sem->list;
-	sem->count = count;
-    }
+    sem->list.next = sem->list.prev = &sem->list;
+    sem->count = count;
 }
 
 mstime_t __sem_down_slow(struct semaphore *sem, mstime_t timeout)
@@ -16,9 +14,7 @@ mstime_t __sem_down_slow(struct semaphore *sem, mstime_t timeout)
 
     irq = irq_save();
 
-    if (!sem_is_valid(sem)) {
-	rv = -1;
-    } else if (sem->count >= 0) {
+    if (sem->count >= 0) {
 	/* Something already freed the semaphore on us */
 	rv = 0;
     } else if (timeout == -1) {
@@ -68,19 +64,17 @@ void __sem_up_slow(struct semaphore *sem)
      * we don't have to do anything, since the bailout clause in
      * __sem_down_slow will take care of it.
      */
-    if (!!sem) {
-	l = sem->list.next;
-	if (l != &sem->list) {
-	    struct thread_block *block;
-	    block = container_of(l, struct thread_block, list);
+    l = sem->list.next;
+    if (l != &sem->list) {
+	struct thread_block *block;
+	block = container_of(l, struct thread_block, list);
 
-	    sem->list.next = block->list.next;
-	    block->list.next->prev = &sem->list;
+	sem->list.next = block->list.next;
+	block->list.next->prev = &sem->list;
 
-	    block->thread->blocked = NULL;
+	block->thread->blocked = NULL;
 
-	    __schedule();
-	}
+	__schedule();
     }
 
     irq_restore(irq);

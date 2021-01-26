@@ -9,13 +9,7 @@
 #include <klibc/compiler.h>
 #include <stddef.h>
 
-#if __SIZEOF_POINTER__ == 4
-#include <klibc/i386/archsetjmp.h>
-#elif __SIZEOF_POINTER__ == 8
-#include <klibc/x86_64/archsetjmp.h>
-#else
-#error "unsupported architecture"
-#endif
+#include <klibc/archsetjmp.h>
 
 __extern int setjmp(jmp_buf);
 __extern __noreturn longjmp(jmp_buf, int);

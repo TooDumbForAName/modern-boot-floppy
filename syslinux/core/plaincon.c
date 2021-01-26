@@ -4,7 +4,6 @@
 
 #include "bios.h"
 #include "graphics.h"
-#include <syslinux/video.h>
 
 /*
  * Write a single character in AL to the console without
@@ -14,8 +13,6 @@ __export void writechr(char data)
 {
 	com32sys_t ireg, oreg;
 
-        memset(&ireg, 0, sizeof ireg);
-        memset(&oreg, 0, sizeof oreg);
 	write_serial(data);	/* write to serial port if needed */
 
 	if (UsingVGA & 0x8)

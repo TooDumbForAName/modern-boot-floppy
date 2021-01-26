@@ -32,19 +32,24 @@
  */
 
 #include <klibc/compiler.h>
-#include <syslinux/firmware.h>
 #include <syslinux/config.h>
 #include <string.h>
+#include <bios.h>
+#include <core.h>
 
 struct syslinux_serial_console_info __syslinux_serial_console_info;
 
 void __syslinux_set_serial_console_info(void)
 {
-    uint16_t iobase, divisor, flowctl;
+    uint16_t flowctl;
 
-    firmware->get_serial_console_info(&iobase, &divisor, &flowctl);
+    __syslinux_serial_console_info.iobase = SerialPort;
+    __syslinux_serial_console_info.divisor = BaudDivisor;
 
-    __syslinux_serial_console_info.iobase = iobase;
-    __syslinux_serial_console_info.divisor = divisor;
+    flowctl = FlowOutput | FlowInput | (FlowIgnore << 4);
+
+    if (!DisplayCon)
+	flowctl |= (0x80 << 8);
+
     __syslinux_serial_console_info.flowctl = flowctl;
 }

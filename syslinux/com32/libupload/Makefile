@@ -1,10 +1,12 @@
 # Include configuration rules
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/com32.mk
 
-REQFLAGS += -I$(SRC)
+REQFLAGS += -I./
 
-LIBOBJS := $(notdir $(patsubst %.c,%.o,$(wildcard $(SRC)/*.c)))
+SUBDIRS := . 
+LIBOBJS := $(foreach dir,$(SUBDIRS),$(patsubst %.c,%.o,$(wildcard $(dir)/*.c)))
 
 BINDIR   = /usr/bin
 LIBDIR   = /usr/lib
@@ -32,6 +34,6 @@ install: all
 	mkdir -m 755 -p $(INSTALLROOT)$(COM32DIR)
 	install -m 644 libcom32upload.a $(INSTALLROOT)$(COM32DIR)
 	mkdir -p $(INSTALLROOT)$(COM32DIR)/include/
-	cp -r $(SRC)/*.h $(INSTALLROOT)$(COM32DIR)/include/
+	cp -r *.h $(INSTALLROOT)$(COM32DIR)/include/
 
 -include .*.d */.*.d */*/.*.d

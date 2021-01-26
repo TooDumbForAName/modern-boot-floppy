@@ -24,7 +24,6 @@
 
 #include "bios.h"
 #include "graphics.h"
-#include <syslinux/video.h>
 
 __export uint8_t UsingVGA = 0;
 uint16_t VGAPos;		/* Pointer into VGA memory */
@@ -94,11 +93,9 @@ static int vgasetmode(void)
 	/*
 	 * Set mode.
 	 */
-	memset(&ireg, 0, sizeof(ireg));
 	ireg.eax.w[0] = 0x0012;	/* Set mode = 640x480 VGA 16 colors */
 	__intcall(0x10, &ireg, &oreg);
 
-	memset(&ireg, 0, sizeof(ireg));
 	ireg.edx.w[0] = (uint32_t)linear_color;
 	ireg.eax.w[0] = 0x1002;	/* Write color registers */
 	__intcall(0x10, &ireg, &oreg);
@@ -341,7 +338,6 @@ static void vgacursorcommon(char data)
 {
 	if (UsingVGA) {
 		com32sys_t ireg;
-                memset(&ireg, 0, sizeof(ireg));
 
 		ireg.eax.b[0] = data;
 		ireg.eax.b[1] = 0x09;

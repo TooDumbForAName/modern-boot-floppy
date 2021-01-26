@@ -30,7 +30,7 @@
 	extern mem_init
 
 	; fs.c
-	extern pm_fs_init, pm_searchdir, getfssec, getfsbytes
+	extern fs_init, pm_searchdir, getfssec, getfsbytes
 	extern pm_mangle_name, pm_load_config
         extern pm_open_file, pm_close_file
 	extern SectorSize, SectorShift
@@ -43,9 +43,6 @@
 
 	; newconfig.c
 	extern pm_is_config_file
-
-	; idle.c
-	extern __idle
 
 %ifdef DEBUG
 	; debug.c

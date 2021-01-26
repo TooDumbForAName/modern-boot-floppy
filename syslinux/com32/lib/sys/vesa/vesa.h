@@ -28,7 +28,6 @@
 #ifndef LIB_SYS_VESA_H
 #define LIB_SYS_VESA_H
 
-#include <syslinux/firmware.h>
 #include <inttypes.h>
 #include <com32.h>
 

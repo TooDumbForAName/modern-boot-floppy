@@ -22,13 +22,14 @@
 #include <sys/module.h>
 #include "common.h"
 
+#define LDLINUX	"ldlinux.c32"
+
 extern char __dynstr_start[];
-extern char __dynstr_end[], __dynsym_end[];
+extern char __dynstr_len[], __dynsym_len[];
 extern char __dynsym_start[];
 extern char __got_start[];
-extern Elf_Dyn __dynamic_start[];
-extern Elf_Word __gnu_hash_start[];
-extern char __module_start[];
+extern Elf32_Dyn __dynamic_start[];
+extern Elf32_Word __gnu_hash_start[];
 
 struct elf_module core_module = {
     .name		= "(core)",
@@ -37,12 +38,15 @@ struct elf_module core_module = {
     .dependants		= LIST_HEAD_INIT((core_module.dependants)),
     .list		= LIST_HEAD_INIT((core_module.list)),
     .module_addr	= (void *)0x0,
+    .base_addr		= (Elf32_Addr) 0x0,
     .ghash_table	= __gnu_hash_start,
     .str_table		= __dynstr_start,
     .sym_table		= __dynsym_start,
     .got		= __got_start,
     .dyn_table		= __dynamic_start,
-    .syment_size	= sizeof(Elf_Sym),
+    .strtable_size	= (size_t) __dynstr_len,
+    .syment_size	= sizeof(Elf32_Sym),
+    .symtable_size	= (size_t) __dynsym_len
 };
 
 /*
@@ -64,7 +68,7 @@ again:
 	if (rv == EEXIST) {
 		/*
 		 * If a COM32 module calls execute() we may need to
-		 * unload all the modules loaded since ldlinux.*,
+		 * unload all the modules loaded since ldlinux.c32,
 		 * and restart initialisation. This is especially
 		 * important for config files.
 		 *
@@ -103,7 +107,6 @@ void load_env32(com32sys_t * regs __unused)
 	int fd;
 	char *argv[] = { LDLINUX, NULL };
 	char realname[FILENAME_MAX];
-	size_t size;
 
 	static const char *search_directories[] = {
 		"/boot/isolinux",
@@ -119,18 +122,15 @@ void load_env32(com32sys_t * regs __unused)
 		NULL
 	};
 
-	dprintf("Starting %s elf module subsystem...\n", ELF_MOD_SYS);
+	dprintf("Starting 32 bit elf module subsystem...\n");
 
-	if (strlen(CurrentDirName) && !path_add(CurrentDirName)) {
+	PATH = malloc(strlen(CurrentDirName) + 1);
+	if (!PATH) {
 		printf("Couldn't allocate memory for PATH\n");
 		goto out;
 	}
 
-	size = (size_t)__dynstr_end - (size_t)__dynstr_start;
-	core_module.strtable_size = size;
-	size = (size_t)__dynsym_end - (size_t)__dynsym_start;
-	core_module.symtable_size = size;
-	core_module.base_addr = (Elf_Addr)__module_start;
+	strcpy(PATH, CurrentDirName);
 
 	init_module_subsystem(&core_module);
 
@@ -154,22 +154,36 @@ void load_env32(com32sys_t * regs __unused)
 		/*
 		 * search_dirs() sets the current working directory if
 		 * it successfully opens the file. Add the directory
-		 * in which we found ldlinux.* to PATH.
+		 * in which we found ldlinux.c32 to PATH.
 		 */
 		if (!core_getcwd(path, sizeof(path)))
 			goto out;
 
-		if (!path_add(path)) {
-			printf("Couldn't allocate memory for PATH\n");
-			goto out;
+		if (!strlen(PATH)) {
+			PATH = realloc(PATH, strlen(path) + 1);
+			if (!PATH) {
+				printf("Couldn't allocate memory for PATH\n");
+				goto out;
+			}
+
+			strcpy(PATH, path);
+		} else {
+			PATH = realloc(PATH, strlen(path) + strlen(PATH) + 2);
+			if (!PATH) {
+				printf("Couldn't allocate memory for PATH\n");
+				goto out;
+			}
+
+			strcat(PATH, ":");
+			strcat(PATH, path);
 		}
 
 		start_ldlinux(1, argv);
 	}
 
 out:
-	writestr("\nFailed to load ");
-	writestr(LDLINUX);
+	free(PATH);
+	writestr("\nFailed to load ldlinux.c32");
 }
 
 static const char *__cmdline;

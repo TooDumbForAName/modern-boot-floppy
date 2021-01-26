@@ -1,7 +1,6 @@
 #ifndef FS_H
 #define FS_H
 
-#include <linux/list.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
@@ -73,9 +72,6 @@ struct fs_ops {
     int      (*next_extent)(struct inode *, uint32_t);
 
     int      (*copy_super)(void *buf);
-
-    char *   (*fs_uuid)(struct fs_info *);
-
 };
 
 /*
@@ -133,7 +129,6 @@ struct device {
     struct disk *disk;
 
     /* the cache stuff */
-    uint8_t cache_init; /* cache initialized state */
     char *cache_data;
     struct cache *cache_head;
     uint16_t cache_block_size;
@@ -187,17 +182,9 @@ static inline struct file *handle_to_file(uint16_t handle)
     return handle ? &files[handle-1] : NULL;
 }
 
-struct path_entry {
-    struct list_head list;
-    const char *str;
-};
-
-extern struct list_head PATH;
-
-extern struct path_entry *path_add(const char *str);
+extern char *PATH;
 
 /* fs.c */
-void fs_init(const struct fs_ops **ops, void *priv);
 void pm_mangle_name(com32sys_t *);
 void pm_searchdir(com32sys_t *);
 void mangle_name(char *, const char *);
@@ -209,9 +196,6 @@ void pm_open_file(com32sys_t *);
 void close_file(uint16_t handle);
 void pm_close_file(com32sys_t *);
 int open_config(void);
-char *fs_uuid(void);
-
-extern uint16_t SectorShift;
 
 /* chdir.c */
 void pm_realpath(com32sys_t *regs);

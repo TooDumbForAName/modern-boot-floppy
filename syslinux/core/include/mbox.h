@@ -45,8 +45,7 @@ mstime_t mbox_fetch(struct mailbox *mbox, void **msg, mstime_t timeout);
  */
 static inline void mbox_set_invalid(struct mailbox *mbox)
 {
-    if (!!mbox)
-	sem_set_invalid(&mbox->prod_sem);
+    sem_set_invalid(&mbox->prod_sem);
 }
 
 /*
@@ -54,7 +53,7 @@ static inline void mbox_set_invalid(struct mailbox *mbox)
  */
 static inline bool mbox_is_valid(struct mailbox *mbox)
 {
-    return ((!!mbox) && sem_is_valid(&mbox->prod_sem));
+    return sem_is_valid(&mbox->prod_sem);
 }
 
 #endif /* _MBOX_H */

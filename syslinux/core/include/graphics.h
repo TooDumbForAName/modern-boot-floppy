@@ -48,8 +48,9 @@ extern uint16_t VGAFontSize;
 
 extern uint8_t UserFont;
 
-extern char fontbuf[8192];
+extern __lowmem char fontbuf[8192];
 
+extern void syslinux_force_text_mode(void);
 extern void vgadisplayfile(FILE *_fd);
 extern void using_vga(uint8_t vga, uint16_t pix_cols, uint16_t pix_rows);
 

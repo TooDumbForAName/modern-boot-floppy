@@ -4,6 +4,7 @@
  * Dynamic ELF modules definitions and services.
  */
 
+
 #ifndef MODULE_H_
 #define MODULE_H_
 
@@ -13,14 +14,6 @@
 #include <setjmp.h>
 #include <stdbool.h>
 #include <linux/list.h>
-
-#if __SIZEOF_POINTER__ == 4
-#include <i386/module.h>
-#elif __SIZEOF_POINTER__ == 8
-#include <x86_64/module.h>
-#else
-#error "unsupported architecture"
-#endif
 
 /*
  * The maximum length of the module file name (including path), stored
@@ -98,26 +91,26 @@ struct elf_module {
 	module_main_t		main_func; // The main function (for executable modules)
 
 	void				*module_addr; // The module location in the memory
-	Elf_Addr			base_addr;	// The base address of the module
-	Elf_Word			module_size; // The module size in memory
+	Elf32_Addr			base_addr;	// The base address of the module
+	Elf32_Word			module_size; // The module size in memory
 
-	Elf_Word			*hash_table;	// The symbol hash table
-	Elf_Word			*ghash_table;	// The GNU style hash table
+	Elf32_Word			*hash_table;	// The symbol hash table
+	Elf32_Word			*ghash_table;	// The GNU style hash table
 	char				*str_table;		// The string table
 	void 				*sym_table;		// The symbol table
 	void				*got;			// The Global Offset Table
-	Elf_Dyn			*dyn_table;		// Dynamic loading information table
+	Elf32_Dyn			*dyn_table;		// Dynamic loading information table
 
-	Elf_Word			strtable_size;	// The size of the string table
-	Elf_Word			syment_size;	// The size of a symbol entry
-	Elf_Word			symtable_size;	// The size of the symbol table
+	Elf32_Word			strtable_size;	// The size of the string table
+	Elf32_Word			syment_size;	// The size of a symbol entry
+	Elf32_Word			symtable_size;	// The size of the symbol table
 
 
 	union {
 		// Transient - Data available while the module is loading
 		struct {
 			FILE		*_file;		// The file object of the open file
-			Elf_Off	_cr_offset;	// The current offset in the open file
+			Elf32_Off	_cr_offset;	// The current offset in the open file
 		} l;
 
 		// Process execution data
@@ -129,7 +122,7 @@ struct elf_module {
 
 	// ELF DT_NEEDED entries for this module
 	int				nr_needed;
-	Elf_Word			needed[MAX_NR_DEPS];
+	Elf32_Word			needed[MAX_NR_DEPS];
 };
 
 /**
@@ -156,6 +149,35 @@ extern struct elf_module *unload_modules_since(const char *name);
 extern FILE *findpath(char *name);
 
 
+#ifdef DYNAMIC_MODULE
+
+/*
+ * This portion is included by dynamic (ELF) module source files.
+ */
+
+#define MODULE_INIT(fn)	static module_init_t __module_init \
+	__used __attribute__((section(".ctors_modinit")))  = fn
+
+#define MODULE_EXIT(fn) static module_exit_t __module_exit \
+	__used __attribute__((section(".dtors_modexit")))  = fn
+
+#else
+
+/*
+ * This portion is included by the core COM32 module.
+ */
+
+/*
+ * Accepted values for various ELF header parameters found in an ELF dynamic
+ * object.
+ */
+#define MODULE_ELF_CLASS		ELFCLASS32		// 32-bit modules
+#define MODULE_ELF_CLASS_SIZE		32			// Size of a word value
+#define MODULE_ELF_DATA			ELFDATA2LSB		// Word endianess
+#define MODULE_ELF_VERSION		EV_CURRENT		// Object version
+#define MODULE_ELF_TYPE			ET_DYN			// Executable type (shared object - .so)
+#define MODULE_ELF_MACHINE		EM_386			// Target architecture
+
 /**
  * Names of symbols with special meaning (treated as special cases at linking)
  */
@@ -175,7 +197,7 @@ extern struct list_head modules_head;
 #define for_each_module(m)	list_for_each_entry(m, &modules_head, list)
 
 /**
- * for_each_module_safe - iterator loop through the list of loaded modules safe against removal.
+ * for_each_module - iterator loop through the list of loaded modules safe against removal.
  */
 #define for_each_module_safe(m, n)				\
 	list_for_each_entry_safe(m, n, &modules_head, list)
@@ -250,7 +272,6 @@ extern int module_unload(struct elf_module *module);
 
 /**
  * _module_unload - unloads the module without running destructors
- * @module: the module descriptor structure.
  *
  * This function is the same as module_unload(), except that the
  * module's destructors are not executed.
@@ -258,7 +279,7 @@ extern int module_unload(struct elf_module *module);
 extern int _module_unload(struct elf_module *module);
 
 /**
- * get_module_type - get type of the module
+ * module_unload - unloads the module from the system.
  * @module: the module descriptor structure.
  *
  * This function returns the type of module we're dealing with
@@ -307,7 +328,7 @@ extern struct elf_module *module_find(const char *name);
  *  If the symbol is found, a pointer to its descriptor structure is returned, and
  *  NULL otherwise.
  */
-extern Elf_Sym *module_find_symbol(const char *name, struct elf_module *module);
+extern Elf32_Sym *module_find_symbol(const char *name, struct elf_module *module);
 
 /**
  * global_find_symbol - searches for a symbol definition in the entire module namespace.
@@ -324,7 +345,7 @@ extern Elf_Sym *module_find_symbol(const char *name, struct elf_module *module);
  * a pointer to the symbol descriptor structure. If the module parameter is not NULL,
  * it is filled with the address of the module descriptor where the symbol is defined.
  */
-extern Elf_Sym *global_find_symbol(const char *name, struct elf_module **module);
+extern Elf32_Sym *global_find_symbol(const char *name, struct elf_module **module);
 
 /**
  * module_get_absolute - converts an memory address relative to a module base address
@@ -334,7 +355,7 @@ extern Elf_Sym *global_find_symbol(const char *name, struct elf_module **module)
  *
  * The function returns a pointer to the absolute memory address.
  */
-static inline void *module_get_absolute(Elf_Addr addr, struct elf_module *module) {
+static inline void *module_get_absolute(Elf32_Addr addr, struct elf_module *module) {
 	return (void*)(module->base_addr + addr);
 }
 
@@ -347,5 +368,7 @@ static inline const struct elf_module *syslinux_current(void)
 	return __syslinux_current;
 }
 
+
+#endif // DYNAMIC_MODULE
 
 #endif // MODULE_H_

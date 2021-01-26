@@ -14,10 +14,12 @@
 ## Linux FAT/NTFS installer
 ##
 
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/syslinux.mk
 
 OPTFLAGS = -g -Os
-INCLUDES = -I$(SRC) -I$(objdir) -I$(SRC)/../libinstaller
+INCLUDES = -I. -I.. -I../libinstaller
 CFLAGS	 = $(GCCWARN) -D_FILE_OFFSET_BITS=64 $(OPTFLAGS) $(INCLUDES)
 LDFLAGS	 = 
 
@@ -35,7 +37,7 @@ OBJS	 = $(patsubst %.c,%.o,$(notdir $(SRCS)))
 
 .SUFFIXES: .c .o .i .s .S
 
-VPATH = $(SRC):$(SRC)/../libinstaller:$(OBJ)/../libinstaller
+VPATH = .:../libinstaller
 
 all: installer
 
@@ -66,4 +68,4 @@ strip:
 %.s: %.c
 	$(CC) $(UMAKEDEPS) $(CFLAGS) -S -o $@ $<
 
--include .*.d
+-include .*.d *.tmp

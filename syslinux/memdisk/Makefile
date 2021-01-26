@@ -11,28 +11,29 @@
 ##
 ## -----------------------------------------------------------------------
 
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/embedded.mk
 -include $(topdir)/version.mk
 
-INCLUDES = -I$(topdir)/com32/include -I$(objdir)
-CFLAGS  += -D__MEMDISK__ -DDATE='"$(DATE)"' -mregparm=3 -DREGPARM=3
+INCLUDES = -I$(topdir)/com32/include
+CFLAGS  += -D__MEMDISK__ -DDATE='"$(DATE)"'
 LDFLAGS  = $(GCCOPT) -g
 NASM     = nasm
 NASMOPT  = -Ox
 NFLAGS   = -dDATE='"$(DATE)"'
-NINCLUDE = -I$(SRC)/
+NINCLUDE =
 
-VPATH = $(SRC)
 SRCS	 = $(wildcard *.asm *.c *.h)
 
 # The DATE is set on the make command line when building binaries for
 # official release.  Otherwise, substitute a hex string that is pretty much
 # guaranteed to be unique to be unique from build to build.
 ifndef HEXDATE
-HEXDATE := $(shell $(PERL) $(SRC)/../now.pl $(SRCS))
+HEXDATE := $(shell $(PERL) ../now.pl $(SRCS))
 endif
 ifndef DATE
-DATE    := $(shell sh $(SRC)/../gen-id.sh $(VERSION) $(HEXDATE))
+DATE    := $(shell sh ../gen-id.sh $(VERSION) $(HEXDATE))
 endif
 
 # Important: init.o16 must be first!!
@@ -83,15 +84,14 @@ memdisk_%.o: memdisk_%.bin
 memdisk16.elf: $(OBJS16)
 	$(LD) -Ttext 0 -o $@ $^
 
-#memdisk32.elf: memdisk.ld $(OBJS32)
-memdisk32.elf: $(ARCH)/memdisk.ld $(OBJS32)
+memdisk32.elf: memdisk.ld $(OBJS32)
 	$(LD) -o $@ -T $^
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 
 memdisk: memdisk16.bin memdisk32.bin postprocess.pl
-	$(PERL) $(SRC)/postprocess.pl $@ memdisk16.bin memdisk32.bin
+	$(PERL) postprocess.pl $@ memdisk16.bin memdisk32.bin
 
 e820test: e820test.c e820func.c msetup.c
 	$(CC) -m32 -g $(GCCWARN) -DTEST -o $@ $^

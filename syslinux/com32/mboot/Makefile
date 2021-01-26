@@ -15,10 +15,11 @@
 ## Multiboot module
 ##
 
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/elf.mk
 
-LNXLIBS	   = $(objdir)/com32/libutil/libutil_lnx.a
+LNXLIBS	   = ../libutil/libutil_lnx.a
 
 MODULES	  = mboot.c32
 TESTFILES =

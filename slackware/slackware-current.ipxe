@@ -2,7 +2,8 @@
 
 set releasename:string -current
 set mirror:string http://ftp.slackware.com/pub/slackware
-set githubhome:string https://github.com/TooDumbForAName/modern-boot-floppy/
+set githubhome:string https://github.com/TooDumbForAName/modern-boot-floppy
+set memdiskurl:string ${githubhome}/raw/master/syslinux/memdisk/memdisk
 
 #Uncomment the following lines if distributing images with this script embedded! 
 #set ubdl 1
@@ -120,8 +121,8 @@ inc kernelattempts
 iseq ${kernelattempts} 6 && goto kernel_failure ||
 echo Downloading kernel...
 sleep 1
-kernel --name memdisk ${githubhome:string}/raw/master/memdisk || goto download_kernel 
-imgargs memdisk harddisk
+kernel --name memdisk ${memdiskurl:string} || goto download_kernel 
+imgargs memdisk harddisk initrd=usbboot.img
 goto download_initrd
 
 :download_initrd
@@ -130,7 +131,7 @@ inc initrdattempts
 iseq ${initrdattempts} 6 && goto initrd_failure ||
 echo Downloading initial ramdisk...
 sleep 1
-initrd --name usb ${mirror:string}/${ARCH:string}-current/usb-and-pxe-installers/usbboot.img || goto download_initrd
+initrd --name usbboot.img ${mirror:string}/${ARCH:string}-current/usb-and-pxe-installers/usbboot.img || goto download_initrd
 goto boot
 
 :kernel_failure
@@ -173,6 +174,9 @@ choose --default dhcp fail_option && goto recovery
 
 :boot
 
+imgstat
+
+echo Launching Slackware...
 boot memdisk
 
 :recovery

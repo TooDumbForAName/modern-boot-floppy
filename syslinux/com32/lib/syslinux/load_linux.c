@@ -40,14 +40,55 @@
 #include <minmax.h>
 #include <errno.h>
 #include <suffix_number.h>
+#include <graphics.h>
 #include <dprintf.h>
 
 #include <syslinux/align.h>
 #include <syslinux/linux.h>
 #include <syslinux/bootrm.h>
 #include <syslinux/movebits.h>
-#include <syslinux/firmware.h>
-#include <syslinux/video.h>
+
+struct linux_header {
+    uint8_t boot_sector_1[0x0020];
+    uint16_t old_cmd_line_magic;
+    uint16_t old_cmd_line_offset;
+    uint8_t boot_sector_2[0x01f1 - 0x0024];
+    uint8_t setup_sects;
+    uint16_t root_flags;
+    uint32_t syssize;
+    uint16_t ram_size;
+    uint16_t vid_mode;
+    uint16_t root_dev;
+    uint16_t boot_flag;
+    uint16_t jump;
+    uint32_t header;
+    uint16_t version;
+    uint32_t realmode_swtch;
+    uint16_t start_sys;
+    uint16_t kernel_version;
+    uint8_t type_of_loader;
+    uint8_t loadflags;
+    uint16_t setup_move_size;
+    uint32_t code32_start;
+    uint32_t ramdisk_image;
+    uint32_t ramdisk_size;
+    uint32_t bootsect_kludge;
+    uint16_t heap_end_ptr;
+    uint16_t pad1;
+    uint32_t cmd_line_ptr;
+    uint32_t initrd_addr_max;
+    uint32_t kernel_alignment;
+    uint8_t relocatable_kernel;
+    uint8_t pad2[3];
+    uint32_t cmdline_max_len;
+    uint32_t hardware_subarch;
+    uint64_t hardware_subarch_data;
+    uint32_t payload_offset;
+    uint32_t payload_length;
+    uint64_t setup_data;
+    uint64_t pref_address;
+    uint32_t init_size;
+} __packed;
 
 #define BOOT_MAGIC 0xAA55
 #define LINUX_MAGIC ('H' + ('d' << 8) + ('r' << 16) + ('S' << 24))
@@ -89,6 +130,23 @@ static inline uint32_t saturate32(unsigned long long v)
     return (v > 0xffffffff) ? 0xffffffff : (uint32_t) v;
 }
 
+/* Get the combined size of the initramfs */
+static addr_t initramfs_size(struct initramfs *initramfs)
+{
+    struct initramfs *ip;
+    addr_t size = 0;
+
+    if (!initramfs)
+	return 0;
+
+    for (ip = initramfs->next; ip->len; ip = ip->next) {
+	size = (size + ip->align - 1) & ~(ip->align - 1);	/* Alignment */
+	size += ip->len;
+    }
+
+    return size;
+}
+
 /* Create the appropriate mappings for the initramfs */
 static int map_initramfs(struct syslinux_movelist **fraglist,
 			 struct syslinux_memmap **mmap,
@@ -124,39 +182,14 @@ static int map_initramfs(struct syslinux_movelist **fraglist,
     return 0;
 }
 
-static size_t calc_cmdline_offset(const struct syslinux_memmap *mmap,
-				  const struct linux_header *hdr,
-				  size_t cmdline_size, addr_t base,
-				  addr_t start)
-{
-    size_t max_offset;
-
-    if (hdr->version >= 0x0202 && (hdr->loadflags & LOAD_HIGH))
-	max_offset = 0x10000;
-    else
-	max_offset = 0xfff0 - cmdline_size;
-
-    if (!syslinux_memmap_highest(mmap, SMT_FREE, &start,
-				 cmdline_size, 0xa0000, 16) ||
-	!syslinux_memmap_highest(mmap, SMT_TERMINAL, &start,
-				 cmdline_size, 0xa0000, 16)) {
-	
-
-	return min(start - base, max_offset) & ~15;
-    }
-
-    dprintf("Unable to find lowmem for cmdline\n");
-    return (0x9ff0 - cmdline_size) & ~15; /* Legacy value: pure hope... */
-}
-
-int bios_boot_linux(void *kernel_buf, size_t kernel_size,
-		    struct initramfs *initramfs,
-		    struct setup_data *setup_data,
-		    char *cmdline)
+int syslinux_boot_linux(void *kernel_buf, size_t kernel_size,
+			struct initramfs *initramfs,
+			struct setup_data *setup_data,
+			char *cmdline)
 {
     struct linux_header hdr, *whdr;
-    size_t real_mode_size, prot_mode_size, base;
-    addr_t real_mode_base, prot_mode_base, prot_mode_max;
+    size_t real_mode_size, prot_mode_size;
+    addr_t real_mode_base, prot_mode_base;
     addr_t irf_size;
     size_t cmdline_size, cmdline_offset;
     struct setup_data *sdp;
@@ -164,6 +197,7 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
     struct syslinux_movelist *fraglist = NULL;
     struct syslinux_memmap *mmap = NULL;
     struct syslinux_memmap *amap = NULL;
+    bool ok;
     uint32_t memlimit = 0;
     uint16_t video_mode = 0;
     const char *arg;
@@ -171,10 +205,8 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
     cmdline_size = strlen(cmdline) + 1;
 
     errno = EINVAL;
-    if (kernel_size < 2 * 512) {
-	dprintf("Kernel size too small\n");
+    if (kernel_size < 2 * 512)
 	goto bail;
-    }
 
     /* Look for specific command-line arguments we care about */
     if ((arg = find_argument(cmdline, "mem=")))
@@ -205,10 +237,8 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
     memcpy(&hdr, kernel_buf, sizeof hdr);
     whdr = (struct linux_header *)kernel_buf;
 
-    if (hdr.boot_flag != BOOT_MAGIC) {
-	dprintf("Invalid boot magic\n");
+    if (hdr.boot_flag != BOOT_MAGIC)
 	goto bail;
-    }
 
     if (hdr.header != LINUX_MAGIC) {
 	hdr.version = 0x0100;	/* Very old kernel */
@@ -220,7 +250,7 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
     if (!hdr.setup_sects)
 	hdr.setup_sects = 4;
 
-    if (hdr.version < 0x0203 || !hdr.initrd_addr_max)
+    if (hdr.version < 0x0203)
 	hdr.initrd_addr_max = 0x37ffffff;
 
     if (!memlimit && memlimit - 1 > hdr.initrd_addr_max)
@@ -237,24 +267,15 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
 	cmdline[cmdline_size - 1] = '\0';
     }
 
+    if (hdr.version < 0x0202 || !(hdr.loadflags & 0x01))
+	cmdline_offset = (0x9ff0 - cmdline_size) & ~15;
+    else
+	cmdline_offset = 0x10000;
+
     real_mode_size = (hdr.setup_sects + 1) << 9;
     real_mode_base = (hdr.loadflags & LOAD_HIGH) ? 0x10000 : 0x90000;
     prot_mode_base = (hdr.loadflags & LOAD_HIGH) ? 0x100000 : 0x10000;
-    prot_mode_max  = (hdr.loadflags & LOAD_HIGH) ? (addr_t)-1 : 0x8ffff;
     prot_mode_size = kernel_size - real_mode_size;
-
-    /* Get the memory map */
-    mmap = syslinux_memory_map();	/* Memory map for shuffle_boot */
-    amap = syslinux_dup_memmap(mmap);	/* Keep track of available memory */
-    if (!mmap || !amap) {
-	errno = ENOMEM;
-	goto bail;
-    }
-
-    cmdline_offset = calc_cmdline_offset(mmap, &hdr, cmdline_size,
-					 real_mode_base,
-					 real_mode_base + real_mode_size);
-    dprintf("cmdline_offset at 0x%x\n", real_mode_base + cmdline_offset);
 
     if (hdr.version < 0x020a) {
 	/*
@@ -267,18 +288,14 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
 	hdr.init_size = 3 * prot_mode_size;
     }
 
-    if (!(hdr.loadflags & LOAD_HIGH) && prot_mode_size > 512 * 1024) {
-	dprintf("Kernel cannot be loaded low\n");
-	goto bail;
-    }
+    if (!(hdr.loadflags & LOAD_HIGH) && prot_mode_size > 512 * 1024)
+	goto bail;		/* Kernel cannot be loaded low */
 
     /* Get the size of the initramfs, if there is one */
     irf_size = initramfs_size(initramfs);
 
-    if (irf_size && hdr.version < 0x0200) {
-	dprintf("Initrd specified but not supported by kernel\n");
-	goto bail;
-    }
+    if (irf_size && hdr.version < 0x0200)
+	goto bail;		/* initrd/initramfs not supported */
 
     if (hdr.version >= 0x0200) {
 	whdr->type_of_loader = 0x30;	/* SYSLINUX unknown module */
@@ -286,6 +303,14 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
 	    whdr->heap_end_ptr = cmdline_offset - 0x0200;
 	    whdr->loadflags |= CAN_USE_HEAP;
 	}
+    }
+
+    /* Get the memory map */
+    mmap = syslinux_memory_map();	/* Memory map for shuffle_boot */
+    amap = syslinux_dup_memmap(mmap);	/* Keep track of available memory */
+    if (!mmap || !amap) {
+	errno = ENOMEM;
+	goto bail;
     }
 
     dprintf("Initial memory map:\n");
@@ -303,33 +328,77 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
 
     /* Place the kernel in memory */
 
-    /*
-     * First, find a suitable place for the protected-mode code.  If
-     * the kernel image is not relocatable, just worry if it fits (it
-     * might not even be a Linux image, after all, and for !LOAD_HIGH
-     * we end up decompressing into a different location anyway), but
-     * if it is, make sure everything fits.
-     */
-    base = prot_mode_base;
+    /* First, find a suitable place for the protected-mode code */
     if (prot_mode_size &&
-	syslinux_memmap_find(amap, &base,
-			     hdr.relocatable_kernel ?
-			     hdr.init_size : prot_mode_size,
-			     hdr.relocatable_kernel, hdr.kernel_alignment,
-			     prot_mode_base, prot_mode_max,
-			     prot_mode_base, prot_mode_max)) {
-	dprintf("Could not find location for protected-mode code\n");
-	goto bail;
+	syslinux_memmap_type(amap, prot_mode_base, prot_mode_size)
+	!= SMT_FREE) {
+	const struct syslinux_memmap *mp;
+	if (!hdr.relocatable_kernel)
+	    goto bail;		/* Can't relocate - no hope */
+
+	ok = false;
+	for (mp = amap; mp; mp = mp->next) {
+	    addr_t start, end;
+	    start = mp->start;
+	    end = mp->next->start;
+
+	    if (mp->type != SMT_FREE)
+		continue;
+
+	    if (end <= prot_mode_base)
+		continue;	/* Only relocate upwards */
+
+	    if (start <= prot_mode_base)
+		start = prot_mode_base;
+
+	    start = ALIGN_UP(start, hdr.kernel_alignment);
+	    if (start >= end)
+		continue;
+
+	    if (end - start >= hdr.init_size) {
+		whdr->code32_start += start - prot_mode_base;
+		prot_mode_base = start;
+		ok = true;
+		break;
+	    }
+	}
+
+	if (!ok)
+	    goto bail;
     }
 
-    whdr->code32_start += base - prot_mode_base;
-
     /* Real mode code */
-    if (syslinux_memmap_find(amap, &real_mode_base,
-			     cmdline_offset + cmdline_size, true, 16,
-			     real_mode_base, 0x90000, 0, 640*1024)) {
-	dprintf("Could not find location for real-mode code\n");
-	goto bail;
+    if (syslinux_memmap_type(amap, real_mode_base,
+			     cmdline_offset + cmdline_size) != SMT_FREE) {
+	const struct syslinux_memmap *mp;
+
+	ok = false;
+	for (mp = amap; mp; mp = mp->next) {
+	    addr_t start, end;
+	    start = mp->start;
+	    end = mp->next->start;
+
+	    if (mp->type != SMT_FREE)
+		continue;
+
+	    if (start < real_mode_base)
+		start = real_mode_base;	/* Lowest address we'll use */
+	    if (end > 640 * 1024)
+		end = 640 * 1024;
+
+	    start = ALIGN_UP(start, 16);
+	    if (start > 0x90000 || start >= end)
+		continue;
+
+	    if (end - start >= cmdline_offset + cmdline_size) {
+		real_mode_base = start;
+		ok = true;
+		break;
+	    }
+	}
+
+	if (!ok)
+	    goto bail;
     }
 
     if (syslinux_add_movelist(&fraglist, real_mode_base, (addr_t) kernel_buf,
@@ -397,10 +466,8 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
 		    best_addr = (adj_end - irf_size) & ~align_mask;
 	    }
 
-	    if (!best_addr) {
-		dprintf("Insufficient memory for initramfs\n");
-		goto bail;
-	    }
+	    if (!best_addr)
+		goto bail;	/* Insufficient memory for initramfs */
 
 	    whdr->ramdisk_image = best_addr;
 	    whdr->ramdisk_size = irf_size;
@@ -495,24 +562,10 @@ int bios_boot_linux(void *kernel_buf, size_t kernel_size,
     }
 
     syslinux_shuffle_boot_rm(fraglist, mmap, 0, &regs);
-    dprintf("shuffle_boot_rm failed\n");
 
 bail:
     syslinux_free_movelist(fraglist);
     syslinux_free_memmap(mmap);
     syslinux_free_memmap(amap);
     return -1;
-}
-
-int syslinux_boot_linux(void *kernel_buf, size_t kernel_size,
-			struct initramfs *initramfs,
-			struct setup_data *setup_data,
-			char *cmdline)
-{
-    if (firmware->boot_linux)
-	return firmware->boot_linux(kernel_buf, kernel_size, initramfs,
-				    setup_data, cmdline);
-
-    return bios_boot_linux(kernel_buf, kernel_size, initramfs,
-			   setup_data, cmdline);
 }

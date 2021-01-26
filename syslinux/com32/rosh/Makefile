@@ -16,10 +16,10 @@
 ## ROSH Read Only Shell
 ##
 
-LIBS = $(objdir)/com32/libutil/libutil.c32 \
-	$(objdir)/com32/lib/libcom32.c32
+LIBS = $(com32)/libutil/libutil.c32 $(com32)/lib/libcom32.c32
 
-VPATH = $(SRC)
+topdir = ../..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/rosh.mk
 
 # from com32/sysdump/Makefile
@@ -36,11 +36,11 @@ endif
 CFLAGS		+= -DDATE='"$(DATE)"'
 LNXCFLAGS	+= -DDATE='"$(DATE)"'
 
-all:	rosh.c32
-
 rosh.o:	rosh.h
 
 rosh.lo:	rosh.h
+
+all:	rosh.c32
 
 allgrc:	rosh.c32 rosh.lnx
 

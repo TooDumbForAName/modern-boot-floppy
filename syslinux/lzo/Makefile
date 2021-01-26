@@ -10,19 +10,17 @@
 ##
 ## -----------------------------------------------------------------------
 
-VPATH = $(SRC)
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/build.mk
 
-INCLUDES += -I$(SRC)/include
+INCLUDES += -I./include
 
-LIBOBJS = $(patsubst %.c,%.o,$(subst $(SRC)/,,$(wildcard $(SRC)/src/*.c)))
+LIBOBJS = $(patsubst %.c,%.o,$(wildcard src/*.c))
 LIB     = lzo.a
 BINS    = prepcore
 
-all : makeoutputdirs $(BINS)
-
-makeoutputdirs:
-	@mkdir -p $(OBJ)/src
+all : $(BINS)
 
 $(LIB) : $(LIBOBJS)
 	rm -f $@

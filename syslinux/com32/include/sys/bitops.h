@@ -36,11 +36,27 @@
 
 #include <klibc/compiler.h>
 
-#if __SIZEOF_POINTER__ == 4
-#include <i386/bitops.h>
-#elif __SIZEOF_POINTER__ == 8
-#include <x86_64/bitops.h>
-#else
-#error "Unable to build for to-be-defined architecture type"
-#endif
+static inline void set_bit(long __bit, void *__bitmap)
+{
+    asm volatile("btsl %1,%0"
+		 : "+m" (*(unsigned char *)__bitmap)
+		 : "Ir" (__bit) : "memory");
+}
+
+static inline void clr_bit(long __bit, void *__bitmap)
+{
+    asm volatile("btcl %1,%0"
+		 : "+m" (*(unsigned char *)__bitmap)
+		 : "Ir" (__bit) : "memory");
+}
+
+static inline int __purefunc test_bit(long __bit, const void *__bitmap)
+{
+    unsigned char __r;
+    asm("btl %2,%1; setc %0"
+	: "=qm" (__r)
+	: "m" (*(const unsigned char *)__bitmap), "Ir" (__bit));
+    return __r;
+}
+
 #endif /* _BITOPS_H */

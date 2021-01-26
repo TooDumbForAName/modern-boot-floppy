@@ -15,8 +15,8 @@
 # Makefile for MBR
 #
 
-VPATH = $(SRC)
-
+topdir = ..
+MAKEDIR = $(topdir)/mk
 include $(MAKEDIR)/embedded.mk
 
 all:	mbr.bin   altmbr.bin   gptmbr.bin   isohdpfx.bin   isohdppx.bin \
@@ -33,18 +33,15 @@ all:	mbr.bin   altmbr.bin   gptmbr.bin   isohdpfx.bin   isohdppx.bin \
 	$(CC) $(MAKEDEPS) $(SFLAGS) -Wa,-a=$*_f.lst -DFORCE_80 -c -o $@ $<
 
 .PRECIOUS: %.elf
-#%.elf: %.o mbr.ld
-%.elf: %.o $(SRC)/$(ARCH)/mbr.ld
-	$(LD) $(LDFLAGS) -T $(SRC)/$(ARCH)/mbr.ld -e _start -o $@ $<
+%.elf: %.o mbr.ld
+	$(LD) $(LDFLAGS) -T mbr.ld -e _start -o $@ $<
 
-%.bin: %.elf $(SRC)/checksize.pl
+%.bin: %.elf checksize.pl
 	$(OBJCOPY) -O binary $< $@
-	$(PERL) $(SRC)/checksize.pl $@
+	$(PERL) checksize.pl $@
 	$(CHMOD) -x $@
 
 mbr_bin.c: mbr.bin
-
-install:
 
 tidy dist:
 	rm -f *.o *.elf *.lst .*.d

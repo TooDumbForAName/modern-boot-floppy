@@ -98,8 +98,7 @@ int __vesacon_open(struct file_info *fp)
 	    ti.cols = 80;
 	} else {
 	    /* Switch mode */
-	    /* Deal with a resolution different from default build */
-	    if (__vesacon_init(&vesacon_resolution.x, &vesacon_resolution.y)) {
+	    if (__vesacon_init(vesacon_resolution.x, vesacon_resolution.y)) {
 		vesacon_counter = -1;
 		return EAGAIN;
 	    }
