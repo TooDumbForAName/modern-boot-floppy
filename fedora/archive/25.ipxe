@@ -1,0 +1,204 @@
+#!ipxe
+
+set releasename:string 25
+set mirror:string http://archives.fedoraproject.org/pub/archive/fedora/linux/releases
+set edition:string Workstation 				#Everything, Workstation, Server should work
+set editionrepo:string ${edition:string}
+
+#Uncomment the following lines if distributing images with this script embedded! 
+#set ubdl 1
+#set gitcommit:string <something>
+echo Welcome to the unofficial Fedora netboot floppy (Fedora ${releasename:string})
+sleep 1
+
+iseq ${ubdl} 1 && goto display_ubdl || 
+
+:detect_interfaces
+ifstat && goto connect_dhcp || goto no_card
+ 
+:connect_dhcp
+ifconf --configurator dhcp --timeout 30000 ||
+isset ${netX/ip} || goto dhcp_failure
+goto find_arch
+
+:manual_setup_plain
+echo Here are the current network interfaces:
+ifstat
+sleep 1
+echo -n Choose an interface to configure (usually net0):
+read interface:string
+ifopen ${interface:string} ; ifclose ${interface:string} || goto plain_failure 
+echo -n IP address: 
+read ${interface:string}/ip ||
+echo -n Gateway: 
+read ${interface:string}/gateway ||
+echo -n Netmask: 
+read ${interface:string}/netmask ||
+echo -n DNS: 
+read ${interface:string}/dns ||
+isset ${${interface:string}/ip} && show ${interface}/ip || goto plain_failure
+isset ${${interface:string}/gateway && show ${interface}/gateway || goto plain_failure
+isset ${${interface:string}/netmask} && show ${interface}/netmask || goto plain_failure
+isset ${${interface:string}/dns} && show ${interface}/dns || goto plain_failure
+echo Trying manually entered settings...
+sleep 3
+goto find_arch
+
+
+:manual_setup_menu
+config
+echo Assuming settings are correct, continuing... 
+sleep 3
+goto find_arch
+
+:plain_failure
+menu error: Failed to manually configure network 
+
+item --gap This is usually caused by entering an invalid
+item --gap interface name or a setting in an invalid format
+item
+item --gap What do you want to do?
+item --key 1 dhcp 1.) Retry DHCP configuration
+item --key 2 manualplain 2.) Manually configure network interface (plain)
+item --key 3 manualmenu 3.) Use iPXE menu to configure network interface
+item --key 4 shell 4.) Exit to iPXE shell
+item --key 5 poweroff 5.) Turn off the computer
+item --key 6 reboot 6.) Reboot the computer
+item --key 7 bios 7.) Resume BIOS boot sequence
+choose --default dhcp fail_option && goto recovery
+
+:no_card
+menu Error: no network card
+item --gap Unable to find any compatible network interfaces. Make sure the card 
+item --gap is installed correctly and/or enabled in the BIOS. You may also want 
+item --gap to try another driver floppy.
+item --key 1 reboot 1.) Reboot the computer
+item --key 2 poweroff 2.) Turn off the computer
+item --key 3 shell 3.) Exit to iPXE shell
+item --key 4 bios 4.) Boot next BIOS device
+choose --default reboot fail_option && goto recovery
+
+:dhcp_failure
+menu error: DHCP configuration
+item --gap DHCP failed to configure a network address.
+item --gap The cable may be unplugged, or your network uses
+item --gap static IP addresses.
+item
+item --gap What do you want to do?
+item --key 1 dhcp 1.) Retry DHCP configuration
+item --key 2 manualplain 2.) Manually configure network interface (plain)
+item --key 3 manualmenu 3.) Use iPXE menu to configure network interface
+item --key 4 shell 4.) Exit to iPXE shell
+item --key 5 poweroff 5.) Turn off the computer
+item --key 6 reboot 6.) Reboot the computer
+item --key 7 bios 7.) Resume BIOS boot sequence
+choose --default dhcp fail_option && goto recovery
+
+:find_arch
+echo Finding architecture...
+cpuid --ext 29 && goto is_64bit || goto is_32bit
+
+:is_64bit
+echo Your computer appears to have a 64-bit processor.
+echo Press any key to download a 32-bit kernel instead.
+echo Otherwise, a 64-bit kernel will be selected.
+prompt --timeout 5000 ... && set ARCH i386 || set ARCH x86_64
+set kernelattempts:int32 0
+set initrdattempts:int32 0
+goto download_kernel
+
+:is_32bit
+echo Your computer appears to have a 32-bit processor.
+set ARCH i386
+sleep 1
+set kernelattempts:int32 0
+set initrdattempts:int32 0
+goto download_kernel
+
+:download_kernel
+sleep 1
+inc kernelattempts
+iseq ${kernelattempts} 6 && goto kernel_failure ||
+echo Downloading kernel...
+sleep 1
+kernel --name linux ${mirror:string}/${releasename:string}/${edition:string}/${ARCH:string}/os/images/pxeboot/vmlinuz || goto download_kernel 
+imgargs linux inst.repo=${mirror:string}/${releasename:string}/${editionrepo:string}/${ARCH:string}/os/
+goto download_initrd
+
+:download_initrd
+sleep 1
+inc initrdattempts
+iseq ${initrdattempts} 6 && goto initrd_failure ||
+echo Downloading initial ramdisk...
+sleep 1
+initrd --name initrd ${mirror:string}/${releasename:string}/${edition:string}/${ARCH:string}/os/images/pxeboot/initrd.img || goto download_initrd
+goto boot
+
+:kernel_failure
+imgfree
+set kernelattempts:int32 0
+menu error: Kernel failure
+item --gap Failed to download kernel too many times. This may be due to
+item --gap incorrect network settings, the mirror is down, or
+item --gap the file has been removed.
+item
+item --gap What do you want to do?
+item --key 1 kernel 1.) Attempt to download kernel again
+item --key 2 dhcp 2.) Retry DHCP configuration
+item --key 3 manualplain 3.) Manually configure network interface (plain)
+item --key 4 manualmenu 4.) Use iPXE menu to configure network interface
+item --key 5 shell 5.) Exit to iPXE shell
+item --key 6 poweroff 6.) Turn off the computer
+item --key 7 reboot 7.) Reboot the computer
+item --key 8 bios 8.) Resume BIOS boot sequence
+choose --default dhcp fail_option && goto recovery 
+
+:initrd_failure
+imgfree
+set kernelattempts:int32 0
+set initrdattempts:int32 0
+menu error: initrd failure
+item --gap Failed to download initial ramdisk too many times.
+item --gap The mirror may be down, or the file has been removed.
+item
+item --gap What do you want to do?
+item --key 1 kernel 1.) Try to download kernel and initrd again
+item --key 2 dhcp 2.) Retry DHCP configuration
+item --key 3 manualplain 3.) Manually configure network interface (plain)
+item --key 4 manualmenu 4.) Use iPXE menu to configure network interface
+item --key 5 shell 5.) Exit to iPXE shell
+item --key 6 poweroff 6.) Turn off the computer
+item --key 7 reboot 7.) Reboot the computer
+item --key 8 bios 8.) Resume BIOS boot sequence
+choose --default dhcp fail_option && goto recovery 
+
+:boot
+
+echo Booting Fedora...
+
+boot linux
+
+:recovery
+iseq ${fail_option} kernel && goto download_kernel || 
+iseq ${fail_option} dhcp && goto connect_dhcp ||
+iseq ${fail_option} manualplain && goto manual_setup_plain ||
+iseq ${fail_option} manualmenu && goto manual_setup_menu || 
+iseq ${fail_option} shell && shell ||
+iseq ${fail_option} poweroff && poweroff || 
+iseq ${fail_option} reboot && reboot ||
+iseq ${fail_option} bios && exit || exit 
+
+:display_ubdl
+
+echo This disk is based upon iPXE, and is distributed under the terms of the 
+echo UBDL (Unmodified Binary Distribution Licence).  If you would like to see 
+echo the source code used to create this disk, you may do so at:
+echo  
+echo https://github.com/ipxe/ipxe/ (GitHub repository)
+echo https://github.com/ipxe/ipxe/commit/${gitcommit} (specific version)
+echo https://github.com/TooDumbForAName/modern-boot-floppy (scripts)
+echo 
+prompt Press any key to continue...
+goto detect_interfaces
+
+
